@@ -1,102 +1,843 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>qdjj.qd.je</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, "Microsoft YaHei", sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .card {
-            background: white;
-            padding: 60px 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            text-align: center;
-            max-width: 500px;
-            width: 90%;
-        }
-        .avatar {
-            width: 80px;
-            height: 80px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            border-radius: 50%;
-            margin: 0 auto 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 32px;
-            color: white;
-            font-weight: bold;
-        }
-        h1 {
-            font-size: 24px;
-            color: #333;
-            margin-bottom: 12px;
-        }
-        .desc {
-            color: #888;
-            font-size: 15px;
-            margin-bottom: 32px;
-            line-height: 1.6;
-        }
-        .links {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-        .link-btn {
-            display: inline-block;
-            padding: 14px 32px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 50px;
-            font-size: 16px;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .link-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-        }
-        .friend-link {
-            display: inline-block;
-            padding: 12px 28px;
-            background: #f5f5f5;
-            color: #555;
-            text-decoration: none;
-            border-radius: 50px;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-        .friend-link:hover {
-            background: #e8e8e8;
-        }
-        footer {
-            margin-top: 32px;
-            color: #ccc;
-            font-size: 13px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>火柴人恭夫 - ARCADE</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a14;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+  }
+  #game-container {
+    position: relative;
+    width: 800px;
+    height: 500px;
+    box-shadow: 0 0 40px #00ffff33, 0 0 80px #ff00ff22;
+    border: 2px solid #00ffff44;
+  }
+  #game-canvas {
+    display: block;
+    background: linear-gradient(to bottom, #0d0d2a 0%, #1a1a3e 50%, #2a1a4e 100%);
+    width: 100%;
+    height: 100%;
+  }
+  .overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(10, 10, 20, 0.85);
+    color: #00ffff;
+    text-align: center;
+    z-index: 10;
+  }
+  .overlay h1 {
+    font-size: 48px;
+    text-shadow: 0 0 20px #00ffff, 0 0 40px #ff00ff;
+    margin-bottom: 10px;
+    letter-spacing: 4px;
+    animation: glow 1.5s infinite alternate;
+  }
+  .overlay h2 {
+    font-size: 20px;
+    color: #ff00ff;
+    text-shadow: 0 0 10px #ff00ff;
+    margin-bottom: 30px;
+  }
+  .overlay .controls-info {
+    background: #00000088;
+    padding: 20px 40px;
+    border: 1px solid #00ffff44;
+    border-radius: 8px;
+    margin-bottom: 30px;
+    color: #00ff88;
+    font-size: 14px;
+    line-height: 2;
+  }
+  .overlay .controls-info span {
+    color: #ffff00;
+    display: inline-block;
+    min-width: 60px;
+    font-weight: bold;
+  }
+  .btn {
+    background: transparent;
+    border: 2px solid #00ffff;
+    color: #00ffff;
+    padding: 12px 40px;
+    font-size: 20px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: all 0.3s;
+    text-shadow: 0 0 10px #00ffff;
+  }
+  .btn:hover {
+    background: #00ffff;
+    color: #000;
+    box-shadow: 0 0 30px #00ffff;
+  }
+  .hidden { display: none !important; }
+  .overlay a, .hud-block a,
+  .overlay button, .hud-block button {
+    position: relative;
+    z-index: 200;
+    pointer-events: auto !important;
+    cursor: pointer;
+  }
+  #hud {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    pointer-events: none;
+    z-index: 5;
+    display: flex;
+    justify-content: space-between;
+    padding: 15px 25px;
+  }
+  .hud-block {
+    color: #00ffff;
+    font-size: 16px;
+    text-shadow: 0 0 8px #00ffff;
+    line-height: 1.6;
+  }
+  .hud-block .label { color: #ff00ff; font-size: 12px; }
+  .hud-block .value { font-size: 24px; font-weight: bold; }
+  .hp-bar {
+    width: 200px;
+    height: 8px;
+    background: #330000;
+    border: 1px solid #ff3333;
+    margin-top: 4px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .hp-fill {
+    height: 100%;
+    background: linear-gradient(to right, #ff0000, #ff8800);
+    transition: width 0.2s;
+  }
+  .enemy-hp-bar {
+    width: 60px;
+    height: 4px;
+    background: #330000;
+    border: 1px solid #ff333366;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .enemy-hp-fill {
+    height: 100%;
+    background: #ff3333;
+    transition: width 0.2s;
+  }
+  @keyframes glow {
+    from { text-shadow: 0 0 20px #00ffff, 0 0 40px #ff00ff; }
+    to { text-shadow: 0 0 30px #00ffff, 0 0 60px #ff00ff, 0 0 10px #ffffff; }
+  }
+  .scanlines::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent 0,
+      transparent 2px,
+      rgba(0,0,0,0.15) 2px,
+      rgba(0,0,0,0.15) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+</style>
 </head>
 <body>
-    <div class="card">
-        <div class="avatar">Q</div>
-        <h1>qdjj.qd.je</h1>
-        <p class="desc">欢迎来到我的网站<br>下面是我的友情链接</p>
-        <div class="links">
-            <a href="https://gqp.nat100.top" class="link-btn">访问 gqp.nat100.top</a>
-        </div>
-        <footer>
-            <p>&copy; 2026 qdjj.qd.je</p>
-        </footer>
+
+<div id="game-container" class="scanlines">
+  <canvas id="game-canvas" width="800" height="500"></canvas>
+
+  <div id="hud" class="hidden">
+    <div class="hud-block">
+      <div class="label">HP</div>
+      <div class="hp-bar"><div class="hp-fill" id="hp-fill" style="width:100%"></div></div>
+      <div style="margin-top:5px"><span class="label">SCORE</span> <span class="value" id="score">0</span></div>
+      <div><span class="label">WAVE</span> <span class="value" id="wave">1</span></div>
     </div>
+    <div class="hud-block" style="text-align:right">
+      <div class="label">ENEMIES LEFT</div>
+      <div class="value" id="enemies-left">0</div>
+      <a href="https://gqp.nat100.top" style="display:inline-block;margin-top:8px;color:#00ff88;font-size:12px;text-decoration:none;border:1px solid #00ff8866;padding:4px 12px;border-radius:3px;background:transparent;">恭夫乡村平台 ▶</a>
+    </div>
+  </div>
+
+  <div id="start-screen" class="overlay">
+    <h1>STICK FIGHTER</h1>
+    <h2>火柴人恭夫 - ARCADE</h2>
+    <div class="controls-info">
+      <div><span>A / D</span> 左右移动</div>
+      <div><span>W / 空格</span> 跳跃</div>
+      <div><span>S</span> 防御格挡</div>
+      <div><span>J</span> 拳击 (快攻)</div>
+      <div><span>K</span> 踢腿 (中程)</div>
+      <div><span>L</span> 重拳 (高伤害)</div>
+    </div>
+    <a href="https://gqp.nat100.top" style="display:block;margin-bottom:20px;color:#00ff88;font-size:16px;text-decoration:none;border:1px solid #00ff8866;padding:8px 20px;border-radius:4px;">▶ 访问 恭夫乡村平台 gqp.nat100.top</a>
+    <button class="btn" id="start-btn">INSERT COIN ▶</button>
+  </div>
+
+  <div id="game-over-screen" class="overlay hidden">
+    <h1 id="end-title" style="color:#ff3333;text-shadow:0 0 20px #ff3333,0 0 40px #ff0066;">GAME OVER</h1>
+    <h2 id="end-subtitle">你倒下了...</h2>
+    <div class="controls-info" style="color:#ff8800">
+      <div>最终得分: <span id="final-score" style="color:#ffff00">0</span></div>
+      <div>击败敌人: <span id="final-kills" style="color:#ffff00">0</span></div>
+      <div>最高波数: <span id="final-wave" style="color:#ffff00">1</span></div>
+    </div>
+    <a href="https://gqp.nat100.top" style="display:block;margin-bottom:20px;color:#00ff88;font-size:16px;text-decoration:none;border:1px solid #00ff8866;padding:8px 20px;border-radius:4px;">▶ 访问 恭夫乡村平台 gqp.nat100.top</a>
+    <button class="btn" id="restart-btn">再来一次</button>
+  </div>
+</div>
+
+<script>
+// ============ 火柴人格斗游戏 ============
+
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const GROUND_Y = H - 80;
+const GRAVITY = 0.7;
+
+// 输入
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ============ 工具函数 ============
+function rectOverlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function dist(a, b) {
+  const dx = a.x - b.x, dy = a.y - b.y;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+function rand(min, max) { return Math.random() * (max - min) + min; }
+
+// ============ 火柴人 ============
+class Stickman {
+  constructor(x, color, isPlayer = false) {
+    this.x = x;
+    this.y = GROUND_Y;
+    this.vx = 0;
+    this.vy = 0;
+    this.color = color;
+    this.isPlayer = isPlayer;
+    this.facing = isPlayer ? 1 : -1;
+    this.width = 30;
+    this.height = 60;
+    this.maxHp = isPlayer ? 100 : 40;
+    this.hp = this.maxHp;
+    this.onGround = true;
+    this.attacking = false;
+    this.attackType = null;
+    this.attackTimer = 0;
+    this.attackCooldown = 0;
+    this.hitFlash = 0;
+    this.dead = false;
+    this.deathTimer = 0;
+    this.dmgAmount = 0;
+    this.hitPushback = 0;
+    this.blocking = false;
+    this.blockTimer = 0;
+    this.aiTimer = 0;
+    this.aiState = 'idle';
+    this.punchHit = false; // 本次攻击是否已命中
+    this.jumpFrame = 0;
+    this.walkPhase = 0;
+  }
+
+  // 攻击框
+  getAttackBox() {
+    if (!this.attacking || this.attackType === null) return null;
+    let range = 0, height = 0, yOffset = 0;
+    if (this.attackType === 'punch') { range = 50; height = 20; yOffset = -35; }
+    if (this.attackType === 'kick') { range = 60; height = 25; yOffset = -20; }
+    if (this.attackType === 'heavy') { range = 45; height = 30; yOffset = -40; }
+    const x = this.facing > 0 ? this.x + 15 : this.x - 15 - range;
+    return { x, y: this.y + yOffset, w: range, h: height };
+  }
+
+  // 身体碰撞框
+  getBody() {
+    return { x: this.x - 15, y: this.y - 60, w: 30, h: 60 };
+  }
+
+  attack(type) {
+    if (this.attacking || this.attackCooldown > 0 || this.dead) return;
+    this.attacking = true;
+    this.attackType = type;
+    this.attackTimer = type === 'punch' ? 18 : type === 'kick' ? 22 : 30;
+    this.attackCooldown = type === 'punch' ? 20 : type === 'kick' ? 30 : 45;
+    this.punchHit = false;
+    this.vx = this.facing * (type === 'heavy' ? 3 : 1.5);
+  }
+
+  takeDamage(amount, fromDir) {
+    if (this.dead) return false;
+    if (this.blocking && this.blockTimer > 0) {
+      amount = Math.floor(amount * 0.2);
+    }
+    this.hp -= amount;
+    this.hitFlash = 10;
+    this.hitPushback = fromDir * 8;
+    this.dmgAmount = amount;
+    this.attacking = false;
+    this.attackType = null;
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.dead = true;
+      this.deathTimer = 60;
+      this.vy = -8;
+      this.vx = fromDir * 4;
+      return true;
+    }
+    return false;
+  }
+
+  update() {
+    if (this.dead) {
+      this.deathTimer--;
+      this.y += this.vy;
+      this.x += this.vx;
+      this.vy += GRAVITY;
+      if (this.y >= GROUND_Y) {
+        this.y = GROUND_Y;
+        this.vy = 0;
+        this.vx *= 0.5;
+      }
+      return;
+    }
+
+    // 物理
+    this.y += this.vy;
+    if (this.y < GROUND_Y) {
+      this.vy += GRAVITY;
+      this.onGround = false;
+    } else {
+      this.vy = 0;
+      this.y = GROUND_Y;
+      this.onGround = true;
+    }
+    this.x += this.vx;
+    if (this.onGround && !this.attacking) this.vx *= 0.8;
+    if (this.attacking) this.vx *= 0.92;
+
+    // 边界
+    this.x = Math.max(30, Math.min(W - 30, this.x));
+
+    // 击退
+    if (this.hitPushback !== 0) {
+      this.x += this.hitPushback;
+      this.hitPushback *= 0.6;
+      if (Math.abs(this.hitPushback) < 0.5) this.hitPushback = 0;
+    }
+
+    // 计时器
+    if (this.attackTimer > 0) {
+      this.attackTimer--;
+      if (this.attackTimer <= 0) {
+        this.attacking = false;
+        this.attackType = null;
+      }
+    }
+    if (this.attackCooldown > 0) this.attackCooldown--;
+    if (this.hitFlash > 0) this.hitFlash--;
+    if (this.blockTimer > 0) this.blockTimer--;
+
+    // 走路相位
+    if (Math.abs(this.vx) > 0.5 && this.onGround) {
+      this.walkPhase += 0.3;
+    }
+
+    // 跳跃动画
+    if (!this.onGround) {
+      this.jumpFrame = this.vy < 0 ? 0 : 1;
+    }
+  }
+
+  // AI
+  aiUpdate(target) {
+    if (this.dead || target.dead) return;
+    this.aiTimer--;
+    const d = dist(this, target);
+    const dir = target.x > this.x ? 1 : -1;
+    this.facing = dir;
+
+    if (this.aiTimer <= 0) {
+      // 决策
+      if (d > 80) {
+        this.aiState = Math.random() < 0.75 ? 'approach' : 'idle';
+        this.aiTimer = 30 + Math.random() * 30;
+      } else if (d < 50) {
+        this.aiState = Math.random() < 0.65 ? 'attack' : (Math.random() < 0.5 ? 'block' : 'retreat');
+        this.aiTimer = 20 + Math.random() * 20;
+      } else {
+        this.aiState = Math.random() < 0.5 ? 'approach' : 'attack';
+        this.aiTimer = 15 + Math.random() * 20;
+      }
+    }
+
+    // 执行
+    if (this.aiState === 'approach') {
+      this.vx = dir * 1.8;
+    } else if (this.aiState === 'retreat') {
+      this.vx = -dir * 1.5;
+    } else if (this.aiState === 'attack') {
+      if (!this.attacking && this.attackCooldown <= 0) {
+        const r = Math.random();
+        if (r < 0.5) this.attack('punch');
+        else if (r < 0.85) this.attack('kick');
+        else this.attack('heavy');
+      }
+    } else if (this.aiState === 'block') {
+      this.blocking = true;
+      this.blockTimer = 15;
+    } else {
+      this.vx *= 0.5;
+    }
+
+    // 随机跳跃
+    if (this.onGround && Math.random() < 0.003) {
+      this.vy = -13;
+      this.onGround = false;
+    }
+  }
+
+  // ============ 绘制火柴人 ============
+  draw(ctx) {
+    const x = this.x, y = this.y;
+    const f = this.facing;
+    const c = this.hitFlash > 0 ? '#ffffff' : this.color;
+
+    ctx.save();
+    ctx.strokeStyle = c;
+    ctx.fillStyle = c;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (this.dead) {
+      // 倒地
+      ctx.translate(x, y);
+      ctx.rotate(this.deathTimer < 30 ? -f * 1.4 : 0);
+      ctx.beginPath();
+      ctx.arc(0, -50, 10, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(0, -40); ctx.lineTo(0, -10);
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(0, -35); ctx.lineTo(-15, -25);
+      ctx.moveTo(0, -35); ctx.lineTo(15, -30);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -10); ctx.lineTo(-12, 0); ctx.lineTo(8, 0);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+
+    // 头
+    ctx.beginPath();
+    ctx.arc(x, y - 55, 10, 0, Math.PI*2);
+      ctx.stroke();
+
+    // 身体
+    ctx.beginPath();
+    ctx.moveTo(x, y - 45);
+    ctx.lineTo(x, y - 25);
+    ctx.stroke();
+
+    // 走路/站立 腿
+    let legPhase = this.onGround ? Math.sin(this.walkPhase) * 10 : (this.jumpFrame === 0 ? -8 : 12);
+    ctx.beginPath();
+    ctx.moveTo(x, y - 25);
+    ctx.lineTo(x + legPhase, y);
+    ctx.moveTo(x, y - 25);
+    ctx.lineTo(x - legPhase * 0.7, y);
+    ctx.stroke();
+
+    // 手臂
+    let armL, armR;
+    if (this.blocking && this.blockTimer > 0) {
+      // 格挡姿势
+      armL = { x: x - f * 15, y: y - 38 };
+      armR = { x: x - f * 20, y: y - 35 };
+      ctx.beginPath();
+      ctx.moveTo(x, y - 40); ctx.lineTo(armL.x, armL.y);
+      ctx.moveTo(x, y - 40); ctx.lineTo(armR.x, armR.y);
+      ctx.stroke();
+      // 格挡闪光
+      ctx.fillStyle = '#00ffff';
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath();
+      ctx.arc(x - f * 18, y - 38, 14, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (this.attacking) {
+      let armExtend = 0, armY = -40;
+      if (this.attackType === 'punch') {
+        armExtend = 25; armY = -35;
+      } else if (this.attackType === 'kick') {
+        armExtend = 0; armY = -40;
+      } else if (this.attackType === 'heavy') {
+        armExtend = 20; armY = -42;
+      }
+
+      // 攻击臂
+      ctx.beginPath();
+      ctx.moveTo(x, y - 40);
+      ctx.lineTo(x + f * (15 + armExtend), y + armY);
+      ctx.stroke();
+
+      // 另一只手
+      ctx.beginPath();
+      ctx.moveTo(x, y - 40);
+      ctx.lineTo(x - f * 12, y - 35);
+      ctx.stroke();
+
+      // 踢腿
+      if (this.attackType === 'kick') {
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 25);
+        ctx.lineTo(x + f * 35, y - 18);
+        ctx.stroke();
+        // 另一腿
+        ctx.beginPath();
+        ctx.moveTo(x, y - 25);
+        ctx.lineTo(x - f * 8, y);
+        ctx.stroke();
+      }
+
+      // 攻击特效
+      if (this.attackTimer > 5) {
+        ctx.fillStyle = '#ffff00';
+        ctx.globalAlpha = 0.4;
+        const ab = this.getAttackBox();
+        if (ab) {
+          ctx.beginPath();
+          ctx.arc(ab.x + ab.w/2, ab.y + ab.h/2, 8 + Math.random()*6, 0, Math.PI*2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    } else {
+      // 普通站立
+      let armSwing = this.onGround ? Math.sin(this.walkPhase + Math.PI) * 8 : 0;
+      ctx.beginPath();
+      ctx.moveTo(x, y - 40);
+      ctx.lineTo(x + armSwing, y - 28);
+      ctx.moveTo(x, y - 40);
+      ctx.lineTo(x - armSwing, y - 28);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // 伤害飘字
+    if (this.hitFlash > 0 && this.dmgAmount > 0) {
+      ctx.fillStyle = '#ff3333';
+      ctx.font = 'bold 16px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText('-' + this.dmgAmount, x, y - 70 - (10 - this.hitFlash) * 2);
+    }
+  }
+}
+
+// ============ 游戏状态 ============
+let player, enemies = [], particles = [], score = 0, wave = 1, kills = 0;
+let gameState = 'start'; // start, playing, over
+let waveTransition = 0;
+let cameraShake = 0;
+
+const enemyColors = ['#ff4444', '#ff8800', '#ff22aa', '#aa44ff'];
+
+function spawnWave() {
+  const count = 1 + Math.floor(wave / 2);
+  for (let i = 0; i < count; i++) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const x = side > 0 ? W - 50 : 50;
+    const c = enemyColors[Math.floor(Math.random() * enemyColors.length)];
+    const e = new Stickman(x, c, false);
+    e.maxHp = 30 + wave * 5;
+    e.hp = e.maxHp;
+    e.facing = x > player.x ? -1 : 1;
+    enemies.push(e);
+  }
+}
+
+function startGame() {
+  player = new Stickman(W/2, '#00ffff', true);
+  enemies = [];
+  particles = [];
+  score = 0;
+  wave = 1;
+  kills = 0;
+  gameState = 'playing';
+  spawnWave();
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('game-over-screen').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+}
+
+function gameOver(win) {
+  gameState = 'over';
+  document.getElementById('final-score').textContent = score;
+  document.getElementById('final-kills').textContent = kills;
+  document.getElementById('final-wave').textContent = wave;
+  document.getElementById('end-title').textContent = win ? 'YOU WIN!' : 'GAME OVER';
+  document.getElementById('end-title').style.color = win ? '#00ff88' : '#ff3333';
+  document.getElementById('end-title').style.textShadow = win ? '0 0 20px #00ff88' : '0 0 20px #ff3333';
+  document.getElementById('end-subtitle').textContent = win ? '你击退了所有敌人!' : '你倒下了...';
+  document.getElementById('game-over-screen').classList.remove('hidden');
+}
+
+// ============ 粒子 ============
+function spawnParticles(x, y, color, count = 10) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: rand(-5, 5),
+      vy: rand(-7, -1),
+      life: 20 + rand(10),
+      color,
+      size: rand(2, 5)
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.3;
+    p.life--;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life / 30;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ============ 主循环 ============
+function handleInput() {
+  if (player.dead) return;
+  if (keys['KeyA'] || keys['ArrowLeft']) { player.vx = -3; player.facing = -1; }
+  if (keys['KeyD'] || keys['ArrowRight']) { player.vx = 3; player.facing = 1; }
+  if ((keys['KeyW'] || keys['Space']) && player.onGround) {
+    player.vy = -13;
+    player.onGround = false;
+  }
+  if (keys['KeyS']) {
+    player.blocking = true;
+    player.blockTimer = 5;
+  } else {
+    player.blocking = false;
+  }
+  if (keys['KeyJ']) { player.attack('punch'); keys['KeyJ'] = false; }
+  if (keys['KeyK']) { player.attack('kick'); keys['KeyK'] = false; }
+  if (keys['KeyL']) { player.attack('heavy'); keys['KeyL'] = false; }
+}
+
+function checkCombat() {
+  // 玩家攻击敌人
+  if (player.attacking && !player.punchHit) {
+    const ab = player.getAttackBox();
+    if (ab) {
+      enemies.forEach(e => {
+        if (e.dead) return;
+        if (rectOverlap(ab, e.getBody())) {
+          let dmg = player.attackType === 'punch' ? 8 : player.attackType === 'kick' ? 12 : 20;
+          const killed = e.takeDamage(dmg, player.facing);
+          player.punchHit = true;
+          spawnParticles(e.x, e.y - 40, '#ff8800', 8);
+          cameraShake = 5;
+          if (killed) {
+            kills++;
+            score += 100 * wave;
+            spawnParticles(e.x, e.y - 40, e.color, 20);
+            cameraShake = 10;
+          }
+        }
+      });
+    }
+  }
+
+  // 敌人攻击玩家
+  enemies.forEach(e => {
+    if (e.dead || !e.attacking || e.punchHit) return;
+    const ab = e.getAttackBox();
+    if (ab && rectOverlap(ab, player.getBody())) {
+      let dmg = e.attackType === 'punch' ? 5 : e.attackType === 'kick' ? 8 : 14;
+      const killed = player.takeDamage(dmg, e.facing);
+      e.punchHit = true;
+      spawnParticles(player.x, player.y - 40, '#ff3333', 6);
+      cameraShake = 8;
+      if (killed) gameOver(false);
+    }
+  });
+}
+
+function checkWaveEnd() {
+  const alive = enemies.filter(e => !e.dead).length;
+  if (alive === 0 && waveTransition <= 0) {
+    waveTransition = 90;
+  }
+  if (waveTransition > 0) {
+    waveTransition--;
+    if (waveTransition === 0) {
+      wave++;
+      if (wave > 10) { gameOver(true); return; }
+      enemies = [];
+      spawnWave();
+    }
+  }
+}
+
+function update() {
+  if (gameState !== 'playing') return;
+
+  handleInput();
+  player.update();
+
+  enemies.forEach(e => {
+    e.aiUpdate(player);
+    e.update();
+  });
+
+  checkCombat();
+  checkWaveEnd();
+
+  // 清理死亡太久的敌人
+  enemies = enemies.filter(e => !(e.dead && e.deathTimer <= 0));
+
+  updateParticles();
+
+  if (cameraShake > 0) cameraShake *= 0.85;
+
+  // HUD
+  document.getElementById('hp-fill').style.width = (player.hp / player.maxHp * 100) + '%';
+  document.getElementById('score').textContent = score;
+  document.getElementById('wave').textContent = wave;
+  const alive = enemies.filter(e => !e.dead).length;
+  document.getElementById('enemies-left').textContent = alive;
+}
+
+function drawBackground() {
+  // 地面
+  ctx.fillStyle = '#1a0a2e';
+  ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+
+  // 地面线
+  ctx.strokeStyle = '#00ffff44';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y);
+  ctx.lineTo(W, GROUND_Y);
+  ctx.stroke();
+
+  // 背景网格
+  ctx.strokeStyle = '#2a1a4e';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < W; i += 40) {
+    ctx.beginPath();
+    ctx.moveTo(i, 0);
+    ctx.lineTo(i, GROUND_Y);
+    ctx.stroke();
+  }
+  for (let j = 0; j < GROUND_Y; j += 40) {
+    ctx.beginPath();
+    ctx.moveTo(0, j);
+    ctx.lineTo(W, j);
+    ctx.stroke();
+  }
+
+  // 远景建筑
+  ctx.fillStyle = '#150a25';
+  for (let i = 0; i < W; i += 60) {
+    const h = 40 + (i % 3) * 20;
+    ctx.fillRect(i, GROUND_Y - h, 50, h);
+  }
+
+  // 波次提示
+  if (waveTransition > 60) {
+    ctx.fillStyle = '#ffff00';
+    ctx.font = 'bold 36px Courier New';
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = (waveTransition - 60) / 30;
+    ctx.fillText('WAVE ' + (wave + 1), W/2, H/2);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function draw() {
+  ctx.save();
+  if (cameraShake > 0.5) {
+    ctx.translate(rand(-cameraShake, cameraShake), rand(-cameraShake, cameraShake));
+  }
+
+  ctx.clearRect(-20, -20, W+40, H+40);
+  drawBackground();
+
+  // 敌人血条
+  enemies.forEach(e => {
+    if (e.dead) return;
+    ctx.fillStyle = '#330000';
+    ctx.fillRect(e.x - 30, e.y - 80, 60, 4);
+    ctx.fillStyle = '#ff3333';
+    ctx.fillRect(e.x - 30, e.y - 80, 60 * (e.hp / e.maxHp), 4);
+  });
+
+  // 绘制角色
+  enemies.forEach(e => e.draw(ctx));
+  if (player) player.draw(ctx);
+
+  drawParticles();
+
+  ctx.restore();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// 按钮
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('restart-btn').addEventListener('click', startGame);
+
+loop();
+</script>
 </body>
 </html>
