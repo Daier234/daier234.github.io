@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>火柴人恭夫 - ARCADE</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,6 +14,8 @@
     min-height: 100vh;
     font-family: 'Courier New', monospace;
     overflow: hidden;
+    touch-action: none;
+    overscroll-behavior: none;
   }
   #game-container {
     position: relative;
@@ -159,6 +161,63 @@
     pointer-events: none;
     z-index: 1;
   }
+  /* ============ 触屏虚拟按键 ============ */
+  #touch-controls {
+    --btn: clamp(46px, 12vw, 62px);
+    --gap: 10px;
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    pointer-events: none;
+  }
+  #touch-controls button {
+    position: absolute;
+    width: var(--btn);
+    height: var(--btn);
+    border-radius: 50%;
+    background: rgba(0, 255, 255, 0.1);
+    border: 2px solid rgba(0, 255, 255, 0.55);
+    color: #00ffff;
+    font-size: calc(var(--btn) * 0.36);
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    pointer-events: auto;
+    padding: 0;
+    line-height: 1;
+  }
+  #touch-controls button.active {
+    background: rgba(0, 255, 255, 0.4);
+    box-shadow: 0 0 15px #00ffff88;
+  }
+  #touch-controls button.atk {
+    border-color: rgba(255, 136, 0, 0.7);
+    color: #ffaa33;
+    background: rgba(255, 136, 0, 0.12);
+  }
+  #touch-controls button.atk.active {
+    background: rgba(255, 136, 0, 0.4);
+    box-shadow: 0 0 15px #ff880088;
+  }
+  #touch-controls button.jump {
+    border-color: rgba(0, 255, 136, 0.7);
+    color: #00ff88;
+    background: rgba(0, 255, 136, 0.1);
+  }
+  #touch-controls button.jump.active {
+    background: rgba(0, 255, 136, 0.35);
+    box-shadow: 0 0 15px #00ff8888;
+  }
+  #btn-left   { left: 16px;  bottom: 22px; }
+  #btn-right  { left: calc(16px + var(--btn) + var(--gap)); bottom: 22px; }
+  #btn-jump   { left: calc(16px + (var(--btn) + var(--gap)) / 2); bottom: calc(22px + var(--btn) + var(--gap)); }
+  #btn-heavy  { right: 16px; bottom: 22px; }
+  #btn-kick   { right: calc(16px + var(--btn) + var(--gap)); bottom: 22px; }
+  #btn-punch  { right: calc(16px + 2 * (var(--btn) + var(--gap))); bottom: 22px; }
+  #btn-block  { right: calc(16px + var(--btn) + var(--gap)); bottom: calc(22px + var(--btn) + var(--gap)); }
 </style>
 </head>
 <body>
@@ -190,6 +249,7 @@
       <div><span>J</span> 拳击 (快攻)</div>
       <div><span>K</span> 踢腿 (中程)</div>
       <div><span>L</span> 重拳 (高伤害)</div>
+      <div style="margin-top:8px;color:#ff8800">手机端: 屏幕虚拟按钮操作, 建议横屏游玩</div>
     </div>
     <a href="https://gqp.nat100.top" style="display:block;margin-bottom:20px;color:#00ff88;font-size:16px;text-decoration:none;border:1px solid #00ff8866;padding:8px 20px;border-radius:4px;">▶ 访问 恭夫乡村平台 gqp.nat100.top</a>
     <button class="btn" id="start-btn">INSERT COIN ▶</button>
@@ -206,6 +266,17 @@
     <a href="https://gqp.nat100.top" style="display:block;margin-bottom:20px;color:#00ff88;font-size:16px;text-decoration:none;border:1px solid #00ff8866;padding:8px 20px;border-radius:4px;">▶ 访问 恭夫乡村平台 gqp.nat100.top</a>
     <button class="btn" id="restart-btn">再来一次</button>
   </div>
+</div>
+
+<!-- 触屏虚拟按键 -->
+<div id="touch-controls" class="hidden">
+  <button id="btn-left">◀</button>
+  <button id="btn-right">▶</button>
+  <button id="btn-jump" class="jump">跳</button>
+  <button id="btn-block">防</button>
+  <button id="btn-punch" class="atk">拳</button>
+  <button id="btn-kick" class="atk">踢</button>
+  <button id="btn-heavy" class="atk">重</button>
 </div>
 
 <script>
@@ -601,10 +672,12 @@ function startGame() {
   document.getElementById('start-screen').classList.add('hidden');
   document.getElementById('game-over-screen').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
+  if (isTouchDevice) touchControls.classList.remove('hidden');
 }
 
 function gameOver(win) {
   gameState = 'over';
+  touchControls.classList.add('hidden');
   document.getElementById('final-score').textContent = score;
   document.getElementById('final-kills').textContent = kills;
   document.getElementById('final-wave').textContent = wave;
@@ -836,6 +909,47 @@ function loop() {
 // 按钮
 document.getElementById('start-btn').addEventListener('click', startGame);
 document.getElementById('restart-btn').addEventListener('click', startGame);
+
+// ============ 屏幕自适应缩放 ============
+function fitScreen() {
+  const cont = document.getElementById('game-container');
+  const scale = Math.min(window.innerWidth / 804, window.innerHeight / 504, 1);
+  cont.style.transform = 'scale(' + scale + ')';
+}
+window.addEventListener('resize', fitScreen);
+fitScreen();
+
+// ============ 触屏虚拟按键 ============
+const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+const touchControls = document.getElementById('touch-controls');
+
+function bindBtn(id, key, oneShot) {
+  const el = document.getElementById(id);
+  const press = e => {
+    e.preventDefault();
+    keys[key] = true;
+    el.classList.add('active');
+    if (el.setPointerCapture && e.pointerId !== undefined) {
+      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+  };
+  const release = e => {
+    e.preventDefault();
+    el.classList.remove('active');
+    if (!oneShot) keys[key] = false;
+  };
+  el.addEventListener('pointerdown', press);
+  el.addEventListener('pointerup', release);
+  el.addEventListener('pointercancel', release);
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+bindBtn('btn-left', 'KeyA', false);   // 左移
+bindBtn('btn-right', 'KeyD', false);  // 右移
+bindBtn('btn-jump', 'KeyW', false);   // 跳跃
+bindBtn('btn-block', 'KeyS', false);  // 格挡
+bindBtn('btn-punch', 'KeyJ', true);   // 拳击(单击触发)
+bindBtn('btn-kick', 'KeyK', true);    // 踢腿(单击触发)
+bindBtn('btn-heavy', 'KeyL', true);   // 重拳(单击触发)
 
 loop();
 </script>
