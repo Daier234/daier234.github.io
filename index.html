@@ -4,8 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>火柴人恭夫 - ARCADE</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     background: #0a0a14;
     display: flex;
@@ -21,74 +22,77 @@
     position: relative;
     width: 800px;
     height: 500px;
-    box-shadow: 0 0 40px #00ffff33, 0 0 80px #ff00ff22;
-    border: 2px solid #00ffff44;
+    background: #0a0a14;
+    border: 2px solid #00ff8844;
+    box-shadow: 0 0 30px #00ff8822;
+    overflow: hidden;
+    transform-origin: center center;
+    transition: transform 0.25s ease-out;
   }
-  #game-canvas {
-    display: block;
-    background: linear-gradient(to bottom, #0d0d2a 0%, #1a1a3e 50%, #2a1a4e 100%);
-    width: 100%;
-    height: 100%;
-  }
+  canvas { display: block; }
+
+  /* ============ 覆盖层界面 ============ */
   .overlay {
     position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
+    inset: 0;
+    z-index: 50;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
-    background: rgba(10, 10, 20, 0.85);
-    color: #00ffff;
+    background: rgba(5, 5, 15, 0.92);
     text-align: center;
-    z-index: 10;
+    padding: 12px 10px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
-  .overlay h1 {
-    font-size: 48px;
-    text-shadow: 0 0 20px #00ffff, 0 0 40px #ff00ff;
-    margin-bottom: 10px;
-    letter-spacing: 4px;
-    animation: glow 1.5s infinite alternate;
-  }
-  .overlay h2 {
-    font-size: 20px;
-    color: #ff00ff;
-    text-shadow: 0 0 10px #ff00ff;
-    margin-bottom: 30px;
-  }
-  .overlay .controls-info {
-    background: #00000088;
-    padding: 20px 40px;
-    border: 1px solid #00ffff44;
-    border-radius: 8px;
-    margin-bottom: 30px;
-    color: #00ff88;
-    font-size: 14px;
-    line-height: 2;
-  }
-  .overlay .controls-info span {
-    color: #ffff00;
-    display: inline-block;
-    min-width: 60px;
+  .overlay::-webkit-scrollbar { width: 6px; }
+  .overlay::-webkit-scrollbar-thumb { background: #00ff8844; border-radius: 3px; }
+  .title {
+    font-size: 30px;
     font-weight: bold;
+    color: #00ff88;
+    text-shadow: 0 0 20px #00ff88, 3px 3px 0 #004422;
+    margin-bottom: 2px;
+    letter-spacing: 4px;
   }
-  .btn {
-    background: transparent;
-    border: 2px solid #00ffff;
+  .subtitle { color: #ff8800; font-size: 12px; margin-bottom: 10px; letter-spacing: 2px; }
+  .mode-section { width: 92%; max-width: 520px; margin-bottom: 8px; }
+  .mode-label {
     color: #00ffff;
-    padding: 12px 40px;
-    font-size: 20px;
+    font-size: 12px;
+    margin-bottom: 5px;
+    letter-spacing: 1px;
+    border-bottom: 1px dashed #00ffff44;
+    padding-bottom: 3px;
+  }
+  .mode-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    background: #00ff8822;
+    color: #00ff88;
+    border: 2px solid #00ff88;
+    padding: 8px 16px;
     font-family: 'Courier New', monospace;
+    font-size: 13px;
+    font-weight: bold;
     cursor: pointer;
-    letter-spacing: 2px;
-    transition: all 0.3s;
-    text-shadow: 0 0 10px #00ffff;
+    letter-spacing: 1px;
+    transition: all 0.15s;
   }
-  .btn:hover {
-    background: #00ffff;
-    color: #000;
-    box-shadow: 0 0 30px #00ffff;
+  .btn:hover { background: #00ff88; color: #000; box-shadow: 0 0 15px #00ff88; }
+  .btn.small { padding: 6px 10px; font-size: 12px; }
+  .btn.vs { border-color: #ff8800; color: #ff8800; background: #ff880022; }
+  .btn.vs:hover { background: #ff8800; color: #000; box-shadow: 0 0 15px #ff8800; }
+  .btn.ai-toggle { border-color: #aa44ff; color: #aa44ff; background: #aa44ff22; padding: 6px 10px; font-size: 12px; }
+  .btn.ai-toggle.human { border-color: #00ffff; color: #00ffff; background: #00ffff22; }
+  .btn.ai-toggle:hover { box-shadow: 0 0 10px currentColor; background: currentColor; color: #000; }
+  .controls-info {
+    font-size: 11px;
+    color: #888;
+    line-height: 1.5;
+    margin-top: 4px;
   }
+  .controls-info span { color: #ffff00; }
   .hidden { display: none !important; }
   .overlay a, .hud-block a,
   .overlay button, .hud-block button {
@@ -97,69 +101,53 @@
     pointer-events: auto !important;
     cursor: pointer;
   }
-  #hud {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%;
-    pointer-events: none;
-    z-index: 5;
-    display: flex;
-    justify-content: space-between;
-    padding: 15px 25px;
+  .game-over-title {
+    font-size: 30px;
+    font-weight: bold;
+    margin-bottom: 6px;
+    letter-spacing: 3px;
   }
-  .hud-block {
-    color: #00ffff;
-    font-size: 16px;
-    text-shadow: 0 0 8px #00ffff;
-    line-height: 1.6;
-  }
-  .hud-block .label { color: #ff00ff; font-size: 12px; }
-  .hud-block .value { font-size: 24px; font-weight: bold; }
-  .hp-bar {
-    width: 200px;
-    height: 8px;
-    background: #330000;
-    border: 1px solid #ff3333;
-    margin-top: 4px;
+  .stats { color: #fff; font-size: 13px; line-height: 1.6; margin-bottom: 10px; }
+  .winner-name { font-size: 22px; margin-bottom: 6px; font-weight: bold; }
+  .link-btn {
+    display: inline-block;
+    margin-bottom: 10px;
+    color: #00ff88;
+    font-size: 13px;
+    text-decoration: none;
+    border: 1px solid #00ff8866;
+    padding: 5px 14px;
     border-radius: 4px;
-    overflow: hidden;
   }
-  .hp-fill {
-    height: 100%;
-    background: linear-gradient(to right, #ff0000, #ff8800);
-    transition: width 0.2s;
+  .link-btn:hover { background: #00ff8822; }
+
+  /* ============ 联网界面 ============ */
+  .code-display {
+    font-size: 38px; font-weight: bold; color: #ffff00;
+    letter-spacing: 14px; text-shadow: 0 0 15px #ffff0088;
+    margin-bottom: 2px; padding-left: 14px;
   }
-  .enemy-hp-bar {
-    width: 60px;
-    height: 4px;
-    background: #330000;
-    border: 1px solid #ff333366;
-    border-radius: 2px;
-    overflow: hidden;
+  #net-code-input {
+    background: #111; border: 2px solid #00ff88; color: #00ff88;
+    font-family: 'Courier New', monospace; font-size: 20px; font-weight: bold;
+    letter-spacing: 6px; text-align: center; width: 130px; padding: 8px;
+    text-transform: uppercase; outline: none;
   }
-  .enemy-hp-fill {
-    height: 100%;
-    background: #ff3333;
-    transition: width 0.2s;
-  }
-  @keyframes glow {
-    from { text-shadow: 0 0 20px #00ffff, 0 0 40px #ff00ff; }
-    to { text-shadow: 0 0 30px #00ffff, 0 0 60px #ff00ff, 0 0 10px #ffffff; }
-  }
-  .scanlines::after {
-    content: '';
+  #net-player-list div { font-size: 14px; margin: 4px 0; letter-spacing: 1px; }
+
+  /* CRT 扫描线效果 */
+  #scanlines {
     position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
     background: repeating-linear-gradient(
       0deg,
-      transparent 0,
+      transparent,
       transparent 2px,
       rgba(0,0,0,0.15) 2px,
       rgba(0,0,0,0.15) 4px
     );
-    pointer-events: none;
-    z-index: 1;
   }
   /* ============ 触屏虚拟按键 ============ */
   #touch-controls {
@@ -175,21 +163,24 @@
     width: var(--btn);
     height: var(--btn);
     border-radius: 50%;
-    background: rgba(0, 255, 255, 0.1);
-    border: 2px solid rgba(0, 255, 255, 0.55);
+    background: rgba(0, 255, 255, 0.08);
+    border: 2px solid rgba(0, 255, 255, 0.45);
     color: #00ffff;
     font-size: calc(var(--btn) * 0.36);
     font-family: 'Courier New', monospace;
     font-weight: bold;
-    touch-action: none;
+    touch-action: manipulation;
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
     pointer-events: auto;
     padding: 0;
     line-height: 1;
+    opacity: 0.6;
+    transition: opacity 0.08s;
   }
   #touch-controls button.active {
+    opacity: 1;
     background: rgba(0, 255, 255, 0.4);
     box-shadow: 0 0 15px #00ffff88;
   }
@@ -218,58 +209,137 @@
   #btn-kick   { right: calc(16px + var(--btn) + var(--gap)); bottom: 22px; }
   #btn-punch  { right: calc(16px + 2 * (var(--btn) + var(--gap))); bottom: 22px; }
   #btn-block  { right: calc(16px + var(--btn) + var(--gap)); bottom: calc(22px + var(--btn) + var(--gap)); }
+  /* 竖屏布局: 屏幕窄, 按钮略小、间距收紧 */
+  @media (orientation: portrait) {
+    #touch-controls { --btn: clamp(42px, 11vw, 54px); --gap: 8px; }
+    #btn-left   { left: 12px;  bottom: 18px; }
+    #btn-right  { left: calc(12px + var(--btn) + var(--gap)); bottom: 18px; }
+    #btn-jump   { left: calc(12px + (var(--btn) + var(--gap)) / 2); bottom: calc(18px + var(--btn) + var(--gap)); }
+    #btn-heavy  { right: 12px; bottom: 18px; }
+    #btn-kick   { right: calc(12px + var(--btn) + var(--gap)); bottom: 18px; }
+    #btn-punch  { right: calc(12px + 2 * (var(--btn) + var(--gap))); bottom: 18px; }
+    #btn-block  { right: calc(12px + var(--btn) + var(--gap)); bottom: calc(18px + var(--btn) + var(--gap)); }
+  }
 </style>
 </head>
 <body>
 
-<div id="game-container" class="scanlines">
+<div id="game-container">
   <canvas id="game-canvas" width="800" height="500"></canvas>
+  <div id="scanlines"></div>
 
-  <div id="hud" class="hidden">
-    <div class="hud-block">
-      <div class="label">HP</div>
-      <div class="hp-bar"><div class="hp-fill" id="hp-fill" style="width:100%"></div></div>
-      <div style="margin-top:5px"><span class="label">SCORE</span> <span class="value" id="score">0</span></div>
-      <div><span class="label">WAVE</span> <span class="value" id="wave">1</span></div>
-    </div>
-    <div class="hud-block" style="text-align:right">
-      <div class="label">ENEMIES LEFT</div>
-      <div class="value" id="enemies-left">0</div>
-      <a href="https://gqp.nat100.top" style="display:inline-block;margin-top:8px;color:#00ff88;font-size:12px;text-decoration:none;border:1px solid #00ff8866;padding:4px 12px;border-radius:3px;background:transparent;">恭夫乡村平台 ▶</a>
-    </div>
-  </div>
+  <!-- 主菜单: 模式选择 -->
+  <div class="overlay" id="menu-screen">
+    <div class="title">火柴人恭夫</div>
+    <div class="subtitle">— MULTIPLAYER ARCADE —</div>
 
-  <div id="start-screen" class="overlay">
-    <h1>STICK FIGHTER</h1>
-    <h2>火柴人恭夫 - ARCADE</h2>
+    <div class="mode-section">
+      <div class="mode-label">◆ 闯关模式 (组队击败敌人波次)</div>
+      <div class="mode-row">
+        <button class="btn small" data-mode="arcade" data-count="1">单人闯关</button>
+        <button class="btn small" data-mode="arcade" data-count="2">双人闯关</button>
+        <button class="btn small" data-mode="arcade" data-count="3">三人闯关</button>
+        <button class="btn small" data-mode="arcade" data-count="4">四人闯关</button>
+      </div>
+    </div>
+
+    <div class="mode-section">
+      <div class="mode-label">◆ 对战模式 (自由混战 · 最后站立者获胜)</div>
+      <div class="mode-row" style="margin-bottom:8px">
+        <button class="btn small vs" data-mode="versus" data-count="2">双人对战</button>
+        <button class="btn small vs" data-mode="versus" data-count="3">三人对战</button>
+        <button class="btn small vs" data-mode="versus" data-count="4">四人对战</button>
+      </div>
+      <div class="mode-row" id="ai-slots">
+        <button class="btn ai-toggle" data-slot="2">P2: 电脑</button>
+        <button class="btn ai-toggle" data-slot="3">P3: 电脑</button>
+        <button class="btn ai-toggle" data-slot="4">P4: 电脑</button>
+      </div>
+    </div>
+
+    <div class="mode-section">
+      <div class="mode-label">◆ 联网对战 (邀请朋友跨网络真人对战)</div>
+      <div class="mode-row">
+        <button class="btn small" id="btn-net-open" style="border-color:#ff22aa;color:#ff22aa;background:#ff22aa22">进入联机大厅</button>
+      </div>
+      <div class="controls-info" style="margin-top:6px">房主创建房间, 朋友输入 4 位房间码加入 (2~4 人, 每人一台设备)</div>
+    </div>
+
+    <div class="mode-row" style="margin:6px 0">
+      <button class="btn small" id="sfx-toggle" style="border-color:#ffcc00;color:#ffcc00;background:#ffcc0022">♪ 音效: 开</button>
+    </div>
+
+    <a href="https://gqp.nat100.top" class="link-btn">▶ 访问 恭夫乡村平台 gqp.nat100.top</a>
+
     <div class="controls-info">
-      <div><span>A / D</span> 左右移动</div>
-      <div><span>W / 空格</span> 跳跃</div>
-      <div><span>S</span> 防御格挡</div>
-      <div><span>J</span> 拳击 (快攻)</div>
-      <div><span>K</span> 踢腿 (中程)</div>
-      <div><span>L</span> 重拳 (高伤害)</div>
-      <div style="margin-top:8px;color:#ff8800">手机端: 屏幕虚拟按钮操作, 建议横屏游玩</div>
+      <div><span>P1</span> WASD+JKL &nbsp;|&nbsp; <span>P2</span> 方向键+小键盘123 &nbsp;|&nbsp; 联机全员用P1键位</div>
+      <div><span>P3</span> FHTG+CVB &nbsp;|&nbsp; <span>P4</span> 小键盘4685+790</div>
+      <div style="margin-top:2px;color:#ff8800">手机端: 虚拟按钮操作P1, 建议横屏游玩</div>
     </div>
-    <a href="https://gqp.nat100.top" style="display:block;margin-bottom:20px;color:#00ff88;font-size:16px;text-decoration:none;border:1px solid #00ff8866;padding:8px 20px;border-radius:4px;">▶ 访问 恭夫乡村平台 gqp.nat100.top</a>
-    <button class="btn" id="start-btn">INSERT COIN ▶</button>
   </div>
 
-  <div id="game-over-screen" class="overlay hidden">
-    <h1 id="end-title" style="color:#ff3333;text-shadow:0 0 20px #ff3333,0 0 40px #ff0066;">GAME OVER</h1>
-    <h2 id="end-subtitle">你倒下了...</h2>
-    <div class="controls-info" style="color:#ff8800">
-      <div>最终得分: <span id="final-score" style="color:#ffff00">0</span></div>
-      <div>击败敌人: <span id="final-kills" style="color:#ffff00">0</span></div>
-      <div>最高波数: <span id="final-wave" style="color:#ffff00">1</span></div>
+  <!-- 联机大厅 -->
+  <div class="overlay hidden" id="online-screen" style="justify-content:center">
+    <div class="title" style="font-size:30px">联机对战</div>
+    <div class="subtitle">FIGHT WITH FRIENDS ONLINE</div>
+
+    <div id="net-entry">
+      <div class="mode-row" style="margin-bottom:18px">
+        <button class="btn" id="net-create-btn">创建房间 (我是房主)</button>
+      </div>
+      <div class="mode-row">
+        <input id="net-code-input" maxlength="4" placeholder="房间码" autocomplete="off">
+        <button class="btn" id="net-join-btn">加入房间</button>
+      </div>
+      <div class="controls-info" style="margin-top:16px">
+        房主点「创建房间」获得 4 位房间码<br>
+        朋友输入房间码加入, 人齐后房主开局 (2~4人)<br>
+        操作统一用 <span>P1 键位</span> (WASD + JKL), 手机用虚拟按钮
+      </div>
     </div>
-    <a href="https://gqp.nat100.top" style="display:block;margin-bottom:20px;color:#00ff88;font-size:16px;text-decoration:none;border:1px solid #00ff8866;padding:8px 20px;border-radius:4px;">▶ 访问 恭夫乡村平台 gqp.nat100.top</a>
-    <button class="btn" id="restart-btn">再来一次</button>
+
+    <div id="net-lobby" class="hidden" style="width:100%">
+      <div style="color:#888;font-size:13px;margin-bottom:2px">房间码 (发给你的朋友)</div>
+      <div class="code-display" id="net-code-show">----</div>
+      <div class="mode-label" style="margin-top:12px">房间玩家 <span id="net-player-count">1</span>/4</div>
+      <div id="net-player-list"></div>
+      <div class="controls-info" id="net-status"></div>
+      <div class="mode-row" style="margin-top:14px">
+        <button class="btn hidden" id="net-start-btn">开始游戏</button>
+        <button class="btn" id="net-exit-btn" style="border-color:#ff4444;color:#ff4444;background:#ff444422">退出房间</button>
+      </div>
+    </div>
+
+    <div id="net-error" style="color:#ff4444;font-size:12px;margin-top:10px;min-height:16px"></div>
+    <button class="btn small" id="net-back-btn" style="margin-top:4px;border-color:#666;color:#666;background:#66666622">返回主菜单</button>
+  </div>
+
+  <!-- 暂停界面 -->
+  <div class="overlay hidden" id="pause-screen" style="justify-content:center">
+    <div class="game-over-title" style="color:#00ffff;text-shadow:0 0 20px #00ffff">PAUSED</div>
+    <div class="stats">游戏已暂停</div>
+    <div class="mode-row">
+      <button class="btn" id="resume-btn">▶ 继续游戏</button>
+      <button class="btn" id="pause-menu-btn" style="border-color:#ff4444;color:#ff4444;background:#ff444422">返回菜单</button>
+    </div>
+  </div>
+
+  <!-- 结算界面 -->
+  <div class="overlay hidden" id="game-over-screen" style="justify-content:center">
+    <div class="game-over-title" id="end-title">GAME OVER</div>
+    <div class="winner-name hidden" id="winner-name"></div>
+    <div class="stats" id="end-stats"></div>
+    <a href="https://gqp.nat100.top" class="link-btn">▶ 访问 恭夫乡村平台 gqp.nat100.top</a>
+    <div class="mode-row">
+      <button class="btn" id="restart-btn">再来一局</button>
+      <button class="btn" id="menu-btn" style="border-color:#00ffff;color:#00ffff;background:#00ffff22">返回菜单</button>
+    </div>
   </div>
 </div>
 
 <!-- 触屏虚拟按键 -->
 <div id="touch-controls" class="hidden">
+  <button id="btn-pause" style="top:10px;left:50%;margin-left:-20px;width:40px;height:40px;font-size:15px;opacity:0.5;">II</button>
   <button id="btn-left">◀</button>
   <button id="btn-right">▶</button>
   <button id="btn-jump" class="jump">跳</button>
@@ -280,7 +350,7 @@
 </div>
 
 <script>
-// ============ 火柴人格斗游戏 ============
+// ============ 火柴人恭夫 · 多人版 ============
 
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
@@ -290,30 +360,92 @@ const GRAVITY = 0.7;
 
 // 输入
 const keys = {};
-window.addEventListener('keydown', e => { keys[e.code] = true; });
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+});
 window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ============ 音效引擎 (Web Audio 实时合成, 零外部文件) ============
+const SFX = (() => {
+  let ac = null, enabled = true;
+  function ctx() {
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (ac && ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function tone(freq, dur, type, vol, slide) {
+    const a = ctx(); if (!a || !enabled) return;
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(freq, a.currentTime);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), a.currentTime + dur);
+    g.gain.setValueAtTime(vol || 0.12, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(); o.stop(a.currentTime + dur);
+  }
+  function noise(dur, vol, cutoff) {
+    const a = ctx(); if (!a || !enabled) return;
+    const len = Math.max(1, Math.floor(a.sampleRate * dur));
+    const buf = a.createBuffer(1, len, a.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = a.createBufferSource(); src.buffer = buf;
+    const f = a.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = cutoff || 800;
+    const g = a.createGain(); g.gain.value = vol || 0.2;
+    src.connect(f); f.connect(g); g.connect(a.destination);
+    src.start();
+  }
+  return {
+    punch:  () => noise(0.07, 0.22, 1400),
+    hit:    () => { noise(0.1, 0.28, 550); tone(130, 0.09, 'sawtooth', 0.14, -70); },
+    heavy:  () => { noise(0.16, 0.32, 320); tone(85, 0.14, 'sawtooth', 0.18, -45); },
+    block:  () => tone(950, 0.05, 'triangle', 0.11, 250),
+    jump:   () => tone(280, 0.11, 'square', 0.07, 260),
+    ko:     () => { tone(420, 0.38, 'sawtooth', 0.18, -360); noise(0.28, 0.28, 420); },
+    wave:   () => { tone(523, 0.08, 'square', 0.11); setTimeout(() => tone(659, 0.08, 'square', 0.11), 90); setTimeout(() => tone(784, 0.11, 'square', 0.11), 180); },
+    win:    () => { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, i === 3 ? 0.24 : 0.09, 'square', 0.13), i * 105)); },
+    ui:     () => tone(620, 0.035, 'square', 0.06),
+    toggle: () => { enabled = !enabled; if (enabled) tone(700, 0.05, 'square', 0.1); return enabled; }
+  };
+})();
+
+// ============ 玩家定义 ============
+const PLAYER_DEFS = [
+  { name: 'P1', color: '#00ffff',
+    ctrl: { left:'KeyA', right:'KeyD', jump:'KeyW', block:'KeyS', punch:'KeyJ', kick:'KeyK', heavy:'KeyL' } },
+  { name: 'P2', color: '#ff4444',
+    ctrl: { left:'ArrowLeft', right:'ArrowRight', jump:'ArrowUp', block:'ArrowDown',
+            punch:'Numpad1', kick:'Numpad2', heavy:'Numpad3' } },
+  { name: 'P3', color: '#ffee00',
+    ctrl: { left:'KeyF', right:'KeyH', jump:'KeyT', block:'KeyG', punch:'KeyC', kick:'KeyV', heavy:'KeyB' } },
+  { name: 'P4', color: '#ff88ff',
+    ctrl: { left:'Numpad4', right:'Numpad6', jump:'Numpad8', block:'Numpad5',
+            punch:'Numpad7', kick:'Numpad9', heavy:'Numpad0' } },
+];
 
 // ============ 工具函数 ============
 function rectOverlap(a, b) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
-
 function dist(a, b) {
   const dx = a.x - b.x, dy = a.y - b.y;
   return Math.sqrt(dx*dx + dy*dy);
 }
-
 function rand(min, max) { return Math.random() * (max - min) + min; }
 
 // ============ 火柴人 ============
 class Stickman {
-  constructor(x, color, isPlayer = false) {
+  constructor(x, color, isPlayer, ctrl) {
     this.x = x;
     this.y = GROUND_Y;
     this.vx = 0;
     this.vy = 0;
     this.color = color;
-    this.isPlayer = isPlayer;
+    this.isPlayer = isPlayer;       // 是否玩家阵营(闯关模式)
+    this.ctrl = ctrl;               // 按键映射(null = AI)
+    this.name = '';
     this.facing = isPlayer ? 1 : -1;
     this.width = 30;
     this.height = 60;
@@ -333,12 +465,12 @@ class Stickman {
     this.blockTimer = 0;
     this.aiTimer = 0;
     this.aiState = 'idle';
-    this.punchHit = false; // 本次攻击是否已命中
+    this.punchHit = false;
     this.jumpFrame = 0;
     this.walkPhase = 0;
+    this.playerDmg = false;         // 对战模式AI使用玩家级伤害
   }
 
-  // 攻击框
   getAttackBox() {
     if (!this.attacking || this.attackType === null) return null;
     let range = 0, height = 0, yOffset = 0;
@@ -349,7 +481,6 @@ class Stickman {
     return { x, y: this.y + yOffset, w: range, h: height };
   }
 
-  // 身体碰撞框
   getBody() {
     return { x: this.x - 15, y: this.y - 60, w: 30, h: 60 };
   }
@@ -362,12 +493,14 @@ class Stickman {
     this.attackCooldown = type === 'punch' ? 20 : type === 'kick' ? 30 : 45;
     this.punchHit = false;
     this.vx = this.facing * (type === 'heavy' ? 3 : 1.5);
+    if (type === 'heavy') SFX.heavy(); else SFX.punch();
   }
 
   takeDamage(amount, fromDir) {
     if (this.dead) return false;
     if (this.blocking && this.blockTimer > 0) {
       amount = Math.floor(amount * 0.2);
+      SFX.block();
     }
     this.hp -= amount;
     this.hitFlash = 10;
@@ -381,6 +514,8 @@ class Stickman {
       this.deathTimer = 60;
       this.vy = -8;
       this.vx = fromDir * 4;
+      SFX.ko();
+      koText = { text: 'K.O.!', timer: 55, color: this.color };
       return true;
     }
     return false;
@@ -400,7 +535,6 @@ class Stickman {
       return;
     }
 
-    // 物理
     this.y += this.vy;
     if (this.y < GROUND_Y) {
       this.vy += GRAVITY;
@@ -414,17 +548,14 @@ class Stickman {
     if (this.onGround && !this.attacking) this.vx *= 0.8;
     if (this.attacking) this.vx *= 0.92;
 
-    // 边界
     this.x = Math.max(30, Math.min(W - 30, this.x));
 
-    // 击退
     if (this.hitPushback !== 0) {
       this.x += this.hitPushback;
       this.hitPushback *= 0.6;
       if (Math.abs(this.hitPushback) < 0.5) this.hitPushback = 0;
     }
 
-    // 计时器
     if (this.attackTimer > 0) {
       this.attackTimer--;
       if (this.attackTimer <= 0) {
@@ -436,12 +567,9 @@ class Stickman {
     if (this.hitFlash > 0) this.hitFlash--;
     if (this.blockTimer > 0) this.blockTimer--;
 
-    // 走路相位
     if (Math.abs(this.vx) > 0.5 && this.onGround) {
       this.walkPhase += 0.3;
     }
-
-    // 跳跃动画
     if (!this.onGround) {
       this.jumpFrame = this.vy < 0 ? 0 : 1;
     }
@@ -449,14 +577,13 @@ class Stickman {
 
   // AI
   aiUpdate(target) {
-    if (this.dead || target.dead) return;
+    if (this.dead || !target || target.dead) return;
     this.aiTimer--;
     const d = dist(this, target);
     const dir = target.x > this.x ? 1 : -1;
     this.facing = dir;
 
     if (this.aiTimer <= 0) {
-      // 决策
       if (d > 80) {
         this.aiState = Math.random() < 0.75 ? 'approach' : 'idle';
         this.aiTimer = 30 + Math.random() * 30;
@@ -469,7 +596,6 @@ class Stickman {
       }
     }
 
-    // 执行
     if (this.aiState === 'approach') {
       this.vx = dir * 1.8;
     } else if (this.aiState === 'retreat') {
@@ -488,14 +614,12 @@ class Stickman {
       this.vx *= 0.5;
     }
 
-    // 随机跳跃
     if (this.onGround && Math.random() < 0.003) {
       this.vy = -13;
       this.onGround = false;
     }
   }
 
-  // ============ 绘制火柴人 ============
   draw(ctx) {
     const x = this.x, y = this.y;
     const f = this.facing;
@@ -509,7 +633,6 @@ class Stickman {
     ctx.lineJoin = 'round';
 
     if (this.dead) {
-      // 倒地
       ctx.translate(x, y);
       ctx.rotate(this.deathTimer < 30 ? -f * 1.4 : 0);
       ctx.beginPath();
@@ -533,7 +656,7 @@ class Stickman {
     // 头
     ctx.beginPath();
     ctx.arc(x, y - 55, 10, 0, Math.PI*2);
-      ctx.stroke();
+    ctx.stroke();
 
     // 身体
     ctx.beginPath();
@@ -541,7 +664,7 @@ class Stickman {
     ctx.lineTo(x, y - 25);
     ctx.stroke();
 
-    // 走路/站立 腿
+    // 腿
     let legPhase = this.onGround ? Math.sin(this.walkPhase) * 10 : (this.jumpFrame === 0 ? -8 : 12);
     ctx.beginPath();
     ctx.moveTo(x, y - 25);
@@ -551,16 +674,13 @@ class Stickman {
     ctx.stroke();
 
     // 手臂
-    let armL, armR;
     if (this.blocking && this.blockTimer > 0) {
-      // 格挡姿势
-      armL = { x: x - f * 15, y: y - 38 };
-      armR = { x: x - f * 20, y: y - 35 };
+      const armL = { x: x - f * 15, y: y - 38 };
+      const armR = { x: x - f * 20, y: y - 35 };
       ctx.beginPath();
       ctx.moveTo(x, y - 40); ctx.lineTo(armL.x, armL.y);
       ctx.moveTo(x, y - 40); ctx.lineTo(armR.x, armR.y);
       ctx.stroke();
-      // 格挡闪光
       ctx.fillStyle = '#00ffff';
       ctx.globalAlpha = 0.3;
       ctx.beginPath();
@@ -569,41 +689,32 @@ class Stickman {
       ctx.globalAlpha = 1;
     } else if (this.attacking) {
       let armExtend = 0, armY = -40;
-      if (this.attackType === 'punch') {
-        armExtend = 25; armY = -35;
-      } else if (this.attackType === 'kick') {
-        armExtend = 0; armY = -40;
-      } else if (this.attackType === 'heavy') {
-        armExtend = 20; armY = -42;
-      }
+      if (this.attackType === 'punch') { armExtend = 25; armY = -35; }
+      else if (this.attackType === 'kick') { armExtend = 0; armY = -40; }
+      else if (this.attackType === 'heavy') { armExtend = 20; armY = -42; }
 
-      // 攻击臂
       ctx.beginPath();
       ctx.moveTo(x, y - 40);
       ctx.lineTo(x + f * (15 + armExtend), y + armY);
       ctx.stroke();
 
-      // 另一只手
       ctx.beginPath();
       ctx.moveTo(x, y - 40);
       ctx.lineTo(x - f * 12, y - 35);
       ctx.stroke();
 
-      // 踢腿
       if (this.attackType === 'kick') {
         ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.moveTo(x, y - 25);
         ctx.lineTo(x + f * 35, y - 18);
         ctx.stroke();
-        // 另一腿
         ctx.beginPath();
         ctx.moveTo(x, y - 25);
         ctx.lineTo(x - f * 8, y);
         ctx.stroke();
       }
 
-      // 攻击特效
       if (this.attackTimer > 5) {
         ctx.fillStyle = '#ffff00';
         ctx.globalAlpha = 0.4;
@@ -616,7 +727,6 @@ class Stickman {
         ctx.globalAlpha = 1;
       }
     } else {
-      // 普通站立
       let armSwing = this.onGround ? Math.sin(this.walkPhase + Math.PI) * 8 : 0;
       ctx.beginPath();
       ctx.moveTo(x, y - 40);
@@ -633,18 +743,385 @@ class Stickman {
       ctx.fillStyle = '#ff3333';
       ctx.font = 'bold 16px Courier New';
       ctx.textAlign = 'center';
-      ctx.fillText('-' + this.dmgAmount, x, y - 70 - (10 - this.hitFlash) * 2);
+      ctx.fillText('-' + this.dmgAmount, x, y - 86 - (10 - this.hitFlash) * 2);
+    }
+
+    // 玩家名牌
+    if (this.name) {
+      ctx.fillStyle = this.color;
+      ctx.font = 'bold 11px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(this.name, x, y - 72);
     }
   }
 }
 
 // ============ 游戏状态 ============
-let player, enemies = [], particles = [], score = 0, wave = 1, kills = 0;
-let gameState = 'start'; // start, playing, over
+let players = [], enemies = [], fighters = [], particles = [];
+let score = 0, wave = 1, kills = 0;
+let gameState = 'menu';            // menu, playing, over
+let gameMode = 'arcade';           // arcade(闯关) | versus(对战)
+let versusCount = 2;               // 对战人数
+let aiSlots = { 2: true, 3: true, 4: true };  // true=电脑
 let waveTransition = 0;
 let cameraShake = 0;
+let fightCountdown = 0;            // 对战开场倒计时
+let roundEndTimer = 0;             // 对战结算延时
+let versusWinner = null;
+let hitStop = 0;                   // 打击顿帧 (专业格斗游戏手感核心)
+let combo = 0, comboTimer = 0;     // 连击计数
+let koText = null;                 // K.O. 公告 {text,timer,color}
+let paused = false;                // 暂停
 
 const enemyColors = ['#ff4444', '#ff8800', '#ff22aa', '#aa44ff'];
+const ARCADE_X = [W/2, W/2 - 70, W/2 + 70, W/2 - 140];
+const VERSUS_X = [120, W - 120, W/2, 260];
+
+function isTouchDevice() {
+  return ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+}
+
+// ============ 联网对战 (PeerJS / WebRTC) ============
+const NET_PREFIX = 'gfarcede-';
+const P1C = PLAYER_DEFS[0].ctrl;
+// 国内可用的 STUN 服务器 (穿透打洞), 无需付费
+const NET_ICE = { iceServers: [
+  { urls: 'stun:stun.qq.com:3478' },
+  { urls: 'stun:stun.miwifi.com:3478' },
+  { urls: 'stun:stun.l.google.com:19302' }
+]};
+let net = { peer: null, conn: null, conns: [], isHost: false, code: '', started: false, idx: 0, lobby: [], lastPlayers: null, lobbySnapshot: null, welcomed: false };
+let netTick = 0;
+
+function genCode() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let c = '';
+  for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+function netError(msg) { document.getElementById('net-error').textContent = msg; }
+function netBroadcast(msg) { net.conns.forEach(c => { if (c.open) c.send(msg); }); }
+function showNetEntry() {
+  document.getElementById('net-entry').classList.remove('hidden');
+  document.getElementById('net-lobby').classList.add('hidden');
+  netError('');
+}
+function showNetLobby() {
+  document.getElementById('net-entry').classList.add('hidden');
+  document.getElementById('net-lobby').classList.remove('hidden');
+}
+function hideAllScreens() {
+  ['menu-screen', 'online-screen', 'game-over-screen'].forEach(id =>
+    document.getElementById(id).classList.add('hidden'));
+}
+function netCleanup() {
+  try { if (net.peer) net.peer.destroy(); } catch (e) {}
+  net = { peer: null, conn: null, conns: [], isHost: false, code: '', started: false, idx: 0, lobby: [], lastPlayers: null, lobbySnapshot: null, welcomed: false };
+}
+function backToMenu() {
+  gameState = 'menu';
+  paused = false; hitStop = 0; combo = 0; comboTimer = 0; koText = null;
+  fighters = []; enemies = []; particles = [];
+  hideAllScreens();
+  document.getElementById('pause-screen').classList.add('hidden');
+  document.getElementById('menu-screen').classList.remove('hidden');
+  touchControls.classList.add('hidden');
+}
+function renderNetLobby() {
+  document.getElementById('net-code-show').textContent = net.code || '----';
+  document.getElementById('net-player-count').textContent = net.lobby.length;
+  document.getElementById('net-player-list').innerHTML = net.lobby.map((p, i) => {
+    const self = (net.isHost && i === 0) || (!net.isHost && i === net.idx);
+    return '<div style="color:' + p.color + '">● ' + p.name + (self ? ' <span style="color:#fff">(你)</span>' : '') + '</div>';
+  }).join('');
+  document.getElementById('net-start-btn').classList.toggle('hidden', !net.isHost);
+  document.getElementById('net-status').textContent = net.isHost
+    ? (net.lobby.length < 2 ? '等待朋友加入... 把房间码发给他们' : '人已到齐, 可以开始!')
+    : '等待房主开始游戏...';
+}
+
+// ---------- 主机端 ----------
+function netCreateRoom() {
+  netCleanup();
+  net.isHost = true;
+  net.code = genCode();
+  netError('');
+  showNetLobby();
+  net.lobby = [{ name: 'P1·房主', color: PLAYER_DEFS[0].color, idx: 0 }];
+  renderNetLobby();
+  net.peer = new Peer(NET_PREFIX + net.code, { config: NET_ICE });
+  net.peer.on('error', err => {
+    if (err && err.type === 'unavailable-id') { net.peer.destroy(); netCreateRoom(); return; }
+    netError('连接服务器失败: ' + (err ? err.type : '未知') + ' (当前网络可能受限)');
+  });
+  net.peer.on('connection', conn => {
+    if (net.started || net.conns.length >= 3) { setTimeout(() => conn.close(), 100); return; }
+    net.conns.push(conn);
+    conn.on('data', d => netOnHostData(conn, d));
+    conn.on('close', () => netOnHostLeave(conn));
+    conn.on('error', () => netOnHostLeave(conn));
+  });
+}
+
+function netOnHostData(conn, d) {
+  if (!d) return;
+  if (d.t === 'join') {
+    if (conn._joined) return;
+    conn._joined = true;
+    conn._idx = net.lobby.length;
+    net.lobby.push({ name: 'P' + (conn._idx + 1), color: PLAYER_DEFS[conn._idx].color, idx: conn._idx });
+    conn.send({ t: 'welcome', idx: conn._idx });
+    netBroadcast({ t: 'lobby', players: net.lobby.map(p => ({ name: p.name, color: p.color })) });
+    renderNetLobby();
+  } else if (d.t === 'input') {
+    const f = fighters[conn._idx];
+    if (f && f.remoteInput) {
+      f.remoteInput.left = d.l; f.remoteInput.right = d.r;
+      f.remoteInput.jump = d.j; f.remoteInput.block = d.b;
+      if (d.p) f.remoteInput.punch = true;
+      if (d.k) f.remoteInput.kick = true;
+      if (d.h) f.remoteInput.heavy = true;
+    }
+  }
+}
+
+function netOnHostLeave(conn) {
+  const i = net.conns.indexOf(conn);
+  if (i >= 0) net.conns.splice(i, 1);
+  if (net.started) {
+    const f = fighters[conn._idx];
+    if (f && !f.dead) { f.hp = 0; f.dead = true; f.deathTimer = 60; f.vy = -8; }
+  } else {
+    const li = net.lobby.findIndex(p => p.idx === conn._idx);
+    if (li >= 0) net.lobby.splice(li, 1);
+    netBroadcast({ t: 'lobby', players: net.lobby.map(p => ({ name: p.name, color: p.color })) });
+    renderNetLobby();
+  }
+}
+
+function netHostStart() {
+  const plist = net.lobby.map(p => ({ name: p.name, color: p.color }));
+  netBroadcast({ t: 'start', players: plist });
+  startOnlineGameHost(plist);
+}
+
+function startOnlineGameHost(plist) {
+  gameMode = 'versus';
+  fighters = []; enemies = []; particles = [];
+  score = 0; wave = 1; kills = 0; waveTransition = 0; roundEndTimer = 0; versusWinner = null;
+  hitStop = 0; combo = 0; comboTimer = 0; koText = null; paused = false;
+  net.started = true; net.lobbySnapshot = plist;
+  gameState = 'playing'; fightCountdown = 90;
+  plist.forEach((p, i) => {
+    const d = PLAYER_DEFS[i];
+    const isLocal = (i === 0);
+    const f = new Stickman(VERSUS_X[i], d.color, true, isLocal ? d.ctrl : null);
+    f.name = p.name;
+    f.maxHp = 100; f.hp = 100; f.playerDmg = true;
+    if (!isLocal) f.remoteInput = { left:false, right:false, jump:false, block:false, punch:false, kick:false, heavy:false };
+    fighters.push(f);
+  });
+  hideAllScreens();
+  if (isTouchDevice()) touchControls.classList.remove('hidden');
+}
+
+// 主机每 2 帧广播一次战场状态 (30Hz)
+function netStateMsg() {
+  return {
+    t: 'state',
+    f: fighters.map(f => ({
+      x: Math.round(f.x * 10) / 10, y: Math.round(f.y * 10) / 10, fc: f.facing,
+      hp: f.hp, d: f.dead ? 1 : 0, at: f.attacking ? 1 : 0, aty: f.attackType,
+      tm: f.attackTimer, bl: (f.blocking && f.blockTimer > 0) ? 1 : 0,
+      hf: f.hitFlash, dm: f.dmgAmount, dt: f.deathTimer,
+      wp: Math.round(f.walkPhase * 100) / 100, jf: f.jumpFrame, og: f.onGround ? 1 : 0
+    })),
+    cd: fightCountdown, re: roundEndTimer,
+    wn: versusWinner ? versusWinner.name : null,
+    wc: versusWinner ? versusWinner.color : null
+  };
+}
+function netMaybeBroadcast() {
+  netTick++;
+  if (netTick % 2 === 0) netBroadcast(netStateMsg());
+}
+
+// 远程玩家输入 → 本地模拟 (主机侧)
+function handleRemoteInput(f) {
+  const c = f.remoteInput;
+  if (c.left) { f.vx = -3; f.facing = -1; }
+  if (c.right) { f.vx = 3; f.facing = 1; }
+  if (c.jump && f.onGround) { f.vy = -13; f.onGround = false; }
+  if (c.block) { f.blocking = true; f.blockTimer = 5; } else { f.blocking = false; }
+  if (c.punch) { f.attack('punch'); c.punch = false; }
+  if (c.kick) { f.attack('kick'); c.kick = false; }
+  if (c.heavy) { f.attack('heavy'); c.heavy = false; }
+}
+
+// ---------- 客户端端 ----------
+function netJoinRoom(code) {
+  netCleanup();
+  net.isHost = false;
+  net.code = code;
+  netError('');
+  net.peer = new Peer({ config: NET_ICE });
+  net.peer.on('open', () => {
+    const conn = net.peer.connect(NET_PREFIX + code, { reliable: true });
+    net.conn = conn;
+    conn.on('open', () => {
+      showNetLobby();
+      renderNetLobby();
+      conn.send({ t: 'join' });
+    });
+    conn.on('data', d => netOnClientData(d));
+    conn.on('close', () => {
+      if (net.started) { netError('与房主断开连接'); setTimeout(() => { netCleanup(); backToMenu(); }, 800); }
+      else if (!net.welcomed) { netError('房间不存在、已满或已开局'); netCleanup(); showNetEntry(); }
+      else { netError('与房主断开连接'); netCleanup(); showNetEntry(); }
+    });
+  });
+  net.peer.on('error', err => {
+    if (err && err.type === 'peer-unavailable') netError('房间不存在, 请检查房间码');
+    else netError('连接服务器失败: ' + (err ? err.type : '未知'));
+  });
+}
+
+function netOnClientData(d) {
+  if (!d) return;
+  if (d.t === 'welcome') { net.welcomed = true; net.idx = d.idx; }
+  else if (d.t === 'lobby') { net.lobby = d.players; renderNetLobby(); }
+  else if (d.t === 'start') { netMakeClientFighters(d.players); netStartClientGame(); }
+  else if (d.t === 'state') { netApplyState(d); }
+  else if (d.t === 'end') {
+    versusWinner = d.wn ? { name: d.wn, color: d.wc } : null;
+    gameOver(true);
+  }
+  else if (d.t === 'restart') { netMakeClientFighters(net.lastPlayers); netStartClientGame(); }
+  else if (d.t === 'end-session') { netError('房主已关闭房间'); setTimeout(() => { netCleanup(); backToMenu(); }, 800); }
+}
+
+function netMakeClientFighters(plist) {
+  net.lastPlayers = plist;
+  fighters = plist.map((p, i) => {
+    const f = new Stickman(VERSUS_X[i], p.color, true, null);
+    f.name = p.name;
+    f.maxHp = 100; f.hp = 100; f.playerDmg = true;
+    return f;
+  });
+  players = []; enemies = []; particles = [];
+}
+
+function netStartClientGame() {
+  gameMode = 'versus';
+  gameState = 'playing';
+  net.started = true;
+  fightCountdown = 90; roundEndTimer = 0; versusWinner = null;
+  hitStop = 0; combo = 0; comboTimer = 0; koText = null; paused = false;
+  score = 0; wave = 1; kills = 0;
+  hideAllScreens();
+  if (isTouchDevice()) touchControls.classList.remove('hidden');
+}
+
+// 客户端应用主机状态 (平滑插值到目标位置)
+function netApplyState(d) {
+  if (!fighters.length || fighters.length !== d.f.length) return;
+  d.f.forEach((s, i) => {
+    const f = fighters[i];
+    f._tx = s.x; f._ty = s.y;
+    f.facing = s.fc;
+    f.hp = s.hp;
+    f.attacking = !!s.at; f.attackType = s.aty; f.attackTimer = s.tm;
+    f.blocking = !!s.bl; f.blockTimer = s.bl ? 5 : 0;
+    f.hitFlash = s.hf; f.dmgAmount = s.dm;
+    f.walkPhase = s.wp; f.jumpFrame = s.jf; f.onGround = !!s.og;
+    if (s.hf === 10) spawnParticles(f.x, f.y - 40, '#ff8800', 5);
+    if (s.d && !f._wasDead) { spawnParticles(f.x, f.y - 40, f.color, 20); cameraShake = 10; }
+    f._wasDead = !!s.d;
+    f.dead = !!s.d; f.deathTimer = s.dt;
+  });
+  fightCountdown = d.cd; roundEndTimer = d.re;
+  versusWinner = d.wn ? { name: d.wn, color: d.wc } : null;
+}
+
+// ---------- 联机界面按钮 ----------
+document.getElementById('btn-net-open').addEventListener('click', () => {
+  if (typeof Peer === 'undefined') { alert('联网组件加载失败, 请检查网络后刷新页面'); return; }
+  document.getElementById('menu-screen').classList.add('hidden');
+  document.getElementById('online-screen').classList.remove('hidden');
+  showNetEntry();
+});
+document.getElementById('net-create-btn').addEventListener('click', netCreateRoom);
+document.getElementById('net-join-btn').addEventListener('click', () => {
+  const code = (document.getElementById('net-code-input').value || '').trim().toUpperCase();
+  if (code.length !== 4) { netError('请输入 4 位房间码'); return; }
+  netJoinRoom(code);
+});
+document.getElementById('net-exit-btn').addEventListener('click', () => {
+  if (net.started && net.isHost) netBroadcast({ t: 'end-session' });
+  netCleanup();
+  showNetEntry();
+});
+document.getElementById('net-back-btn').addEventListener('click', () => {
+  if (net.started && net.isHost) netBroadcast({ t: 'end-session' });
+  netCleanup();
+  backToMenu();
+});
+document.getElementById('net-start-btn').addEventListener('click', netHostStart);
+window.addEventListener('beforeunload', () => { try { if (net.peer) net.peer.destroy(); } catch (e) {} });
+
+// 客户端定时上报本地输入 (30Hz)
+setInterval(() => {
+  if (net.started && !net.isHost && net.conn && net.conn.open && gameState === 'playing') {
+    net.conn.send({
+      t: 'input',
+      l: !!keys[P1C.left], r: !!keys[P1C.right],
+      j: !!keys[P1C.jump], b: !!keys[P1C.block],
+      p: !!keys[P1C.punch], k: !!keys[P1C.kick], h: !!keys[P1C.heavy]
+    });
+    keys[P1C.punch] = false; keys[P1C.kick] = false; keys[P1C.heavy] = false;
+  }
+}, 33);
+
+// ============ 开局 ============
+function startGame(mode, count) {
+  gameMode = mode;
+  players = []; enemies = []; fighters = []; particles = [];
+  score = 0; wave = 1; kills = 0;
+  waveTransition = 0; roundEndTimer = 0; versusWinner = null;
+  hitStop = 0; combo = 0; comboTimer = 0; koText = null;
+  paused = false;
+  document.getElementById('pause-screen').classList.add('hidden');
+  gameState = 'playing';
+
+  if (mode === 'arcade') {
+    // count 名人类玩家
+    for (let i = 0; i < count; i++) {
+      const d = PLAYER_DEFS[i];
+      const p = new Stickman(ARCADE_X[i], d.color, true, d.ctrl);
+      p.name = d.name;
+      players.push(p);
+      fighters.push(p);
+    }
+    spawnWave();
+  } else {
+    // 对战: P1 人类(触屏设备用虚拟键), P2~P4 按 aiSlots
+    for (let i = 0; i < count; i++) {
+      const d = PLAYER_DEFS[i];
+      const isAI = i > 0 && aiSlots[i + 1];
+      const f = new Stickman(VERSUS_X[i], d.color, true, isAI ? null : d.ctrl);
+      f.name = d.name + (isAI ? '(AI)' : '');
+      f.maxHp = 100; f.hp = 100;
+      f.playerDmg = true;
+      fighters.push(f);
+      if (!isAI) players.push(f);
+    }
+    fightCountdown = 90;
+  }
+
+  document.getElementById('menu-screen').classList.add('hidden');
+  document.getElementById('game-over-screen').classList.add('hidden');
+  if (isTouchDevice()) touchControls.classList.remove('hidden');
+}
 
 function spawnWave() {
   const count = 1 + Math.floor(wave / 2);
@@ -652,44 +1129,60 @@ function spawnWave() {
     const side = Math.random() < 0.5 ? -1 : 1;
     const x = side > 0 ? W - 50 : 50;
     const c = enemyColors[Math.floor(Math.random() * enemyColors.length)];
-    const e = new Stickman(x, c, false);
+    const e = new Stickman(x, c, false, null);
     e.maxHp = 30 + wave * 5;
     e.hp = e.maxHp;
-    e.facing = x > player.x ? -1 : 1;
+    e.facing = x > W/2 ? -1 : 1;
     enemies.push(e);
+    fighters.push(e);
   }
-}
-
-function startGame() {
-  player = new Stickman(W/2, '#00ffff', true);
-  enemies = [];
-  particles = [];
-  score = 0;
-  wave = 1;
-  kills = 0;
-  gameState = 'playing';
-  spawnWave();
-  document.getElementById('start-screen').classList.add('hidden');
-  document.getElementById('game-over-screen').classList.add('hidden');
-  document.getElementById('hud').classList.remove('hidden');
-  if (isTouchDevice) touchControls.classList.remove('hidden');
 }
 
 function gameOver(win) {
   gameState = 'over';
+  paused = false;
   touchControls.classList.add('hidden');
-  document.getElementById('final-score').textContent = score;
-  document.getElementById('final-kills').textContent = kills;
-  document.getElementById('final-wave').textContent = wave;
-  document.getElementById('end-title').textContent = win ? 'YOU WIN!' : 'GAME OVER';
-  document.getElementById('end-title').style.color = win ? '#00ff88' : '#ff3333';
-  document.getElementById('end-title').style.textShadow = win ? '0 0 20px #00ff88' : '0 0 20px #ff3333';
-  document.getElementById('end-subtitle').textContent = win ? '你击退了所有敌人!' : '你倒下了...';
+  if (win) SFX.win();
+  const title = document.getElementById('end-title');
+  const winnerEl = document.getElementById('winner-name');
+  const statsEl = document.getElementById('end-stats');
+
+  // 联机: 主机广播结算; 客户端隐藏重开按钮
+  if (net.started && net.isHost) {
+    netBroadcast({ t: 'end', wn: versusWinner ? versusWinner.name : null, wc: versusWinner ? versusWinner.color : null });
+  }
+  document.getElementById('restart-btn').classList.toggle('hidden', net.started && !net.isHost);
+
+  if (gameMode === 'versus') {
+    title.textContent = 'ROUND OVER';
+    title.style.color = '#00ff88';
+    title.style.textShadow = '0 0 20px #00ff88';
+    if (versusWinner) {
+      winnerEl.textContent = '🏆 ' + versusWinner.name + ' 获胜!';
+      winnerEl.style.color = versusWinner.color;
+      winnerEl.classList.remove('hidden');
+    } else {
+      winnerEl.textContent = '💀 平局!';
+      winnerEl.style.color = '#ffff00';
+      winnerEl.classList.remove('hidden');
+    }
+    statsEl.innerHTML = '存活: ' + fighters.filter(f => !f.dead).length + ' 人';
+  } else {
+    winnerEl.classList.add('hidden');
+    title.textContent = win ? 'YOU WIN!' : 'GAME OVER';
+    title.style.color = win ? '#00ff88' : '#ff3333';
+    title.style.textShadow = win ? '0 0 20px #00ff88' : '0 0 20px #ff3333';
+    statsEl.innerHTML =
+      '最终得分: <span style="color:#ffff00">' + score + '</span><br>' +
+      '击败敌人: <span style="color:#ffff00">' + kills + '</span><br>' +
+      '最高波数: <span style="color:#ffff00">' + wave + '</span>';
+  }
   document.getElementById('game-over-screen').classList.remove('hidden');
 }
 
 // ============ 粒子 ============
 function spawnParticles(x, y, color, count = 10) {
+  if (particles.length > 150) return;   // 粒子上限, 防性能下降
   for (let i = 0; i < count; i++) {
     particles.push({
       x, y,
@@ -722,116 +1215,190 @@ function drawParticles() {
   ctx.globalAlpha = 1;
 }
 
-// ============ 主循环 ============
-function handleInput() {
-  if (player.dead) return;
-  if (keys['KeyA'] || keys['ArrowLeft']) { player.vx = -3; player.facing = -1; }
-  if (keys['KeyD'] || keys['ArrowRight']) { player.vx = 3; player.facing = 1; }
-  if ((keys['KeyW'] || keys['Space']) && player.onGround) {
-    player.vy = -13;
-    player.onGround = false;
+// ============ 输入 ============
+function handlePlayerInput(f) {
+  if (f.dead || !f.ctrl) return;
+  const c = f.ctrl;
+  if (keys[c.left])  { f.vx = -3; f.facing = -1; }
+  if (keys[c.right]) { f.vx = 3;  f.facing = 1; }
+  if (keys[c.jump] && f.onGround) {
+    f.vy = -13;
+    f.onGround = false;
+    SFX.jump();
   }
-  if (keys['KeyS']) {
-    player.blocking = true;
-    player.blockTimer = 5;
+  if (keys[c.block]) {
+    f.blocking = true;
+    f.blockTimer = 5;
   } else {
-    player.blocking = false;
+    f.blocking = false;
   }
-  if (keys['KeyJ']) { player.attack('punch'); keys['KeyJ'] = false; }
-  if (keys['KeyK']) { player.attack('kick'); keys['KeyK'] = false; }
-  if (keys['KeyL']) { player.attack('heavy'); keys['KeyL'] = false; }
+  if (keys[c.punch]) { f.attack('punch'); keys[c.punch] = false; }
+  if (keys[c.kick])  { f.attack('kick');  keys[c.kick] = false; }
+  if (keys[c.heavy]) { f.attack('heavy'); keys[c.heavy] = false; }
+}
+
+// ============ 战斗判定 ============
+function getDamageOf(attacker) {
+  if (attacker.playerDmg || attacker.isPlayer) {
+    return attacker.attackType === 'punch' ? 8 : attacker.attackType === 'kick' ? 12 : 20;
+  }
+  return attacker.attackType === 'punch' ? 5 : attacker.attackType === 'kick' ? 8 : 14;
 }
 
 function checkCombat() {
-  // 玩家攻击敌人
-  if (player.attacking && !player.punchHit) {
-    const ab = player.getAttackBox();
-    if (ab) {
-      enemies.forEach(e => {
-        if (e.dead) return;
-        if (rectOverlap(ab, e.getBody())) {
-          let dmg = player.attackType === 'punch' ? 8 : player.attackType === 'kick' ? 12 : 20;
-          const killed = e.takeDamage(dmg, player.facing);
-          player.punchHit = true;
-          spawnParticles(e.x, e.y - 40, '#ff8800', 8);
-          cameraShake = 5;
-          if (killed) {
-            kills++;
-            score += 100 * wave;
-            spawnParticles(e.x, e.y - 40, e.color, 20);
-            cameraShake = 10;
-          }
-        }
-      });
-    }
-  }
+  fighters.forEach(att => {
+    if (att.dead || !att.attacking || att.punchHit) return;
+    const ab = att.getAttackBox();
+    if (!ab) return;
 
-  // 敌人攻击玩家
-  enemies.forEach(e => {
-    if (e.dead || !e.attacking || e.punchHit) return;
-    const ab = e.getAttackBox();
-    if (ab && rectOverlap(ab, player.getBody())) {
-      let dmg = e.attackType === 'punch' ? 5 : e.attackType === 'kick' ? 8 : 14;
-      const killed = player.takeDamage(dmg, e.facing);
-      e.punchHit = true;
-      spawnParticles(player.x, player.y - 40, '#ff3333', 6);
-      cameraShake = 8;
-      if (killed) gameOver(false);
-    }
+    fighters.forEach(tar => {
+      if (tar === att || tar.dead) return;
+      // 闯关模式: 己方不互伤
+      if (gameMode === 'arcade' && att.isPlayer && tar.isPlayer) return;
+      if (gameMode === 'arcade' && !att.isPlayer && !tar.isPlayer) return;
+      if (!rectOverlap(ab, tar.getBody())) return;
+
+      const dmg = getDamageOf(att);
+      const killed = tar.takeDamage(dmg, att.facing);
+      att.punchHit = true;
+      spawnParticles(tar.x, tar.y - 40, '#ff8800', 8);
+      cameraShake = 5;
+      hitStop = killed ? 6 : 3;               // 顿帧: 命中3帧/击杀6帧
+      SFX.hit();
+      // 连击: 玩家方命中敌人 (闯关模式)
+      if (gameMode === 'arcade' && att.isPlayer && !tar.isPlayer) {
+        combo++;
+        comboTimer = 90;
+      }
+
+      // 触屏振动: 本地玩家打中(轻) / 本地玩家被打(重)
+      if (isTouchDevice()) {
+        if (att === fighters[0] && !net.started || (net.started && net.isHost && att === fighters[0])) haptic(20);
+        else if (net.started && !net.isHost && tar === fighters[net.idx]) haptic(40);
+        else if (!net.started && tar.ctrl) haptic(40);
+        else if (gameMode === 'arcade' && tar.isPlayer) haptic(40);
+      }
+
+      if (killed) {
+        if (gameMode === 'arcade' && !tar.isPlayer) {
+          kills++;
+          score += 100 * wave;
+        }
+        spawnParticles(tar.x, tar.y - 40, tar.color, 20);
+        cameraShake = 10;
+        if (isTouchDevice()) haptic(60);   // 击杀再震一下
+      }
+    });
   });
 }
 
-function checkWaveEnd() {
-  const alive = enemies.filter(e => !e.dead).length;
-  if (alive === 0 && waveTransition <= 0) {
-    waveTransition = 90;
-  }
-  if (waveTransition > 0) {
-    waveTransition--;
-    if (waveTransition === 0) {
-      wave++;
-      if (wave > 10) { gameOver(true); return; }
-      enemies = [];
-      spawnWave();
+// ============ 胜负判定 ============
+function checkRoundEnd() {
+  if (gameMode === 'arcade') {
+    // 所有玩家死亡 → 失败
+    if (players.every(p => p.dead)) { gameOver(false); return; }
+    // 波次
+    const alive = enemies.filter(e => !e.dead).length;
+    if (alive === 0 && waveTransition <= 0) waveTransition = 90;
+    if (waveTransition > 0) {
+      waveTransition--;
+      if (waveTransition === 0) {
+        wave++;
+        if (wave > 10) { gameOver(true); return; }
+        enemies = [];
+        fighters = fighters.filter(f => f.isPlayer);
+        spawnWave();
+        SFX.wave();
+      }
+    }
+  } else {
+    // 对战: 只剩 ≤1 人存活
+    const alive = fighters.filter(f => !f.dead);
+    if (alive.length <= 1 && roundEndTimer <= 0) {
+      versusWinner = alive.length === 1 ? alive[0] : null;
+      roundEndTimer = 90;
+    }
+    if (roundEndTimer > 0) {
+      roundEndTimer--;
+      if (roundEndTimer === 0) gameOver(true);
     }
   }
 }
 
+// ============ 寻找最近目标 ============
+function nearestTarget(f) {
+  let best = null, bestD = Infinity;
+  fighters.forEach(t => {
+    if (t === f || t.dead) return;
+    if (gameMode === 'arcade' && f.isPlayer) return;  // 玩家不AI
+    if (gameMode === 'arcade' && !f.isPlayer && !t.isPlayer) return; // 敌人不打敌人
+    if (gameMode === 'versus' && !f.ctrl && t === f) return;
+    const d = dist(f, t);
+    if (d < bestD) { bestD = d; best = t; }
+  });
+  return best;
+}
+
+// ============ 主循环 ============
 function update() {
   if (gameState !== 'playing') return;
 
-  handleInput();
-  player.update();
+  // 联机客户端: 不做本地模拟, 平滑插值 + 粒子
+  if (net.started && !net.isHost) {
+    fighters.forEach(f => {
+      if (f._tx !== undefined) {
+        f.x += (f._tx - f.x) * 0.5;
+        f.y += (f._ty - f.y) * 0.5;
+      }
+    });
+    updateParticles();
+    if (cameraShake > 0) cameraShake *= 0.85;
+    return;
+  }
 
-  enemies.forEach(e => {
-    e.aiUpdate(player);
-    e.update();
+  // 对战开场倒计时
+  if (fightCountdown > 0) {
+    fightCountdown--;
+    fighters.forEach(f => f.update());
+    updateParticles();
+    if (net.started && net.isHost) netMaybeBroadcast();
+    return;
+  }
+
+  fighters.forEach(f => {
+    if (f.ctrl) handlePlayerInput(f);
+    else if (f.remoteInput) handleRemoteInput(f);
+    else {
+      const t = nearestTarget(f);
+      if (t) f.aiUpdate(t);
+      else f.vx *= 0.5;
+    }
+    f.update();
   });
 
   checkCombat();
-  checkWaveEnd();
+  checkRoundEnd();
+  if (gameState !== 'playing') return;
 
-  // 清理死亡太久的敌人
-  enemies = enemies.filter(e => !(e.dead && e.deathTimer <= 0));
+  // 清理死亡太久且非玩家的角色
+  if (gameMode === 'arcade') {
+    enemies = enemies.filter(e => !(e.dead && e.deathTimer <= 0));
+    fighters = fighters.filter(f => f.isPlayer || !(f.dead && f.deathTimer <= 0));
+  } else if (gameMode === 'versus') {
+    fighters = fighters.filter(f => !(f.dead && f.deathTimer <= 0));
+  }
 
   updateParticles();
-
   if (cameraShake > 0) cameraShake *= 0.85;
 
-  // HUD
-  document.getElementById('hp-fill').style.width = (player.hp / player.maxHp * 100) + '%';
-  document.getElementById('score').textContent = score;
-  document.getElementById('wave').textContent = wave;
-  const alive = enemies.filter(e => !e.dead).length;
-  document.getElementById('enemies-left').textContent = alive;
+  // 联机主机: 广播战场状态
+  if (net.started && net.isHost) netMaybeBroadcast();
 }
 
 function drawBackground() {
-  // 地面
   ctx.fillStyle = '#1a0a2e';
   ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
 
-  // 地面线
   ctx.strokeStyle = '#00ffff44';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -839,7 +1406,6 @@ function drawBackground() {
   ctx.lineTo(W, GROUND_Y);
   ctx.stroke();
 
-  // 背景网格
   ctx.strokeStyle = '#2a1a4e';
   ctx.lineWidth = 1;
   for (let i = 0; i < W; i += 40) {
@@ -855,7 +1421,6 @@ function drawBackground() {
     ctx.stroke();
   }
 
-  // 远景建筑
   ctx.fillStyle = '#150a25';
   for (let i = 0; i < W; i += 60) {
     const h = 40 + (i % 3) * 20;
@@ -863,13 +1428,75 @@ function drawBackground() {
   }
 
   // 波次提示
-  if (waveTransition > 60) {
+  if (gameMode === 'arcade' && waveTransition > 60) {
     ctx.fillStyle = '#ffff00';
     ctx.font = 'bold 36px Courier New';
     ctx.textAlign = 'center';
     ctx.globalAlpha = (waveTransition - 60) / 30;
     ctx.fillText('WAVE ' + (wave + 1), W/2, H/2);
     ctx.globalAlpha = 1;
+  }
+
+  // 对战倒计时
+  if (fightCountdown > 0) {
+    ctx.fillStyle = '#ff8800';
+    ctx.font = 'bold 56px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(fightCountdown > 30 ? 'READY' : 'FIGHT!', W/2, H/2);
+  }
+
+  // 对战回合结束提示
+  if (roundEndTimer > 0 && versusWinner) {
+    ctx.fillStyle = versusWinner.color;
+    ctx.font = 'bold 40px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(versusWinner.name + ' WINS!', W/2, H/2);
+  }
+}
+
+function drawHud() {
+  // 玩家血条 (顶部) — 闯关: 人类玩家; 对战: 全部参战者
+  const hpList = gameMode === 'versus' ? fighters : players;
+  const barW = 170, barH = 10;
+  const positions = [
+    { x: 12, y: 10 }, { x: W - 12 - barW, y: 10 },
+    { x: 12, y: 32 }, { x: W - 12 - barW, y: 32 },
+  ];
+  hpList.forEach((p, i) => {
+    if (i >= 4) return;
+    const pos = positions[i];
+    ctx.fillStyle = p.color;
+    ctx.font = 'bold 11px Courier New';
+    ctx.textAlign = 'left';
+    ctx.fillText(p.name, pos.x, pos.y + 8);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(pos.x + 28, pos.y, barW - 28, barH);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(pos.x + 28, pos.y, (barW - 28) * (p.hp / p.maxHp), barH);
+  });
+
+  // 闯关模式: 敌人血条 + 顶部信息
+  if (gameMode === 'arcade') {
+    enemies.forEach(e => {
+      if (e.dead) return;
+      ctx.fillStyle = '#330000';
+      ctx.fillRect(e.x - 30, e.y - 80, 60, 4);
+      ctx.fillStyle = '#ff3333';
+      ctx.fillRect(e.x - 30, e.y - 80, 60 * (e.hp / e.maxHp), 4);
+    });
+
+    ctx.fillStyle = '#00ff88';
+    ctx.font = 'bold 13px Courier New';
+    ctx.textAlign = 'center';
+    const alive = enemies.filter(e => !e.dead).length;
+    ctx.fillText('WAVE ' + wave + '/10   SCORE ' + score + '   敌人 x' + alive, W/2, 20);
+  } else {
+    // 对战模式: 存活人数
+    const alive = fighters.filter(f => !f.dead).length;
+    ctx.fillStyle = '#ff8800';
+    ctx.font = 'bold 13px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('存活 ' + alive + ' / ' + fighters.length, W/2, 20);
   }
 }
 
@@ -882,46 +1509,181 @@ function draw() {
   ctx.clearRect(-20, -20, W+40, H+40);
   drawBackground();
 
-  // 敌人血条
-  enemies.forEach(e => {
-    if (e.dead) return;
-    ctx.fillStyle = '#330000';
-    ctx.fillRect(e.x - 30, e.y - 80, 60, 4);
-    ctx.fillStyle = '#ff3333';
-    ctx.fillRect(e.x - 30, e.y - 80, 60 * (e.hp / e.maxHp), 4);
-  });
-
   // 绘制角色
-  enemies.forEach(e => e.draw(ctx));
-  if (player) player.draw(ctx);
-
+  fighters.forEach(f => f.draw(ctx));
   drawParticles();
 
   ctx.restore();
+
+  // K.O. 公告 (带缩放弹出动画)
+  if (koText) {
+    if (koText.timer > 0) {
+      koText.timer--;
+      const pop = koText.timer > 45 ? 1 + (koText.timer - 45) * 0.12 : 1;
+      ctx.save();
+      ctx.translate(W/2, H/2 - 30);
+      ctx.scale(pop, pop);
+      ctx.globalAlpha = Math.min(1, koText.timer / 15);
+      ctx.fillStyle = koText.color;
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 4;
+      ctx.font = 'bold 52px Courier New';
+      ctx.textAlign = 'center';
+      ctx.strokeText(koText.text, 0, 0);
+      ctx.fillText(koText.text, 0, 0);
+      ctx.restore();
+    } else koText = null;
+  }
+
+  // 连击显示 (越连越大)
+  if (gameMode === 'arcade' && combo > 1 && comboTimer > 0) {
+    const fade = Math.min(1, comboTimer / 25);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = '#ffff00';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.font = 'bold ' + (18 + Math.min(combo, 12)) + 'px Courier New';
+    ctx.textAlign = 'right';
+    ctx.strokeText(combo + ' HITS!', W - 16, 90);
+    ctx.fillText(combo + ' HITS!', W - 16, 90);
+    ctx.restore();
+  }
+
+  if (gameState === 'playing' || gameState === 'over') drawHud();
 }
 
-function loop() {
-  update();
-  draw();
+// ============ 主循环: 固定60步/秒 (高刷屏不再加速, 任何设备速度一致) ============
+let lastTime = 0, acc = 0;
+const STEP = 1000 / 60;
+function loop(ts) {
   requestAnimationFrame(loop);
+  if (!lastTime) lastTime = ts;
+  let dt = ts - lastTime;
+  lastTime = ts;
+  if (dt > 250) dt = STEP;                 // 后台切回防时间跳跃
+  acc += dt;
+  let guard = 0;
+  while (acc >= STEP && guard++ < 5) {     // 最多补5帧防死亡螺旋
+    acc -= STEP;
+    if (gameState === 'playing' && !paused) {
+      if (hitStop > 0) hitStop--;          // 顿帧期间冻结模拟
+      else update();
+    }
+    if (comboTimer > 0) { comboTimer--; if (comboTimer === 0) combo = 0; }
+  }
+  draw();
 }
+requestAnimationFrame(loop);
 
-// 按钮
-document.getElementById('start-btn').addEventListener('click', startGame);
-document.getElementById('restart-btn').addEventListener('click', startGame);
+// ============ 菜单按钮 ============
+// 所有按钮点击音 (首次点击同时解锁音频上下文)
+document.querySelectorAll('button').forEach(b =>
+  b.addEventListener('click', () => { try { SFX.ui(); } catch (e) {} }));
 
-// ============ 屏幕自适应缩放 ============
+// 音效开关
+document.getElementById('sfx-toggle').addEventListener('click', () => {
+  const on = SFX.toggle();
+  document.getElementById('sfx-toggle').textContent = on ? '♪ 音效: 开' : '♪ 音效: 关';
+});
+
+// 暂停系统 (联机对战不可暂停)
+function togglePause() {
+  if (gameState !== 'playing' || net.started) return;
+  paused = !paused;
+  document.getElementById('pause-screen').classList.toggle('hidden', !paused);
+  if (paused) clearAllKeys();
+}
+window.addEventListener('keydown', e => {
+  if (e.code === 'Escape' || e.code === 'KeyP') togglePause();
+});
+document.getElementById('btn-pause').addEventListener('click', togglePause);
+document.getElementById('resume-btn').addEventListener('click', togglePause);
+document.getElementById('pause-menu-btn').addEventListener('click', () => {
+  paused = false;
+  document.getElementById('pause-screen').classList.add('hidden');
+  backToMenu();
+});
+
+document.querySelectorAll('[data-mode]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.mode === 'versus') versusCount = parseInt(btn.dataset.count);
+    startGame(btn.dataset.mode, parseInt(btn.dataset.count));
+  });
+});
+
+// 对战模式 P2-P4 电脑/玩家切换
+document.querySelectorAll('.ai-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const slot = parseInt(btn.dataset.slot);
+    aiSlots[slot] = !aiSlots[slot];
+    btn.textContent = 'P' + slot + ': ' + (aiSlots[slot] ? '电脑' : '玩家');
+    btn.classList.toggle('human', !aiSlots[slot]);
+  });
+});
+
+// 结算按钮
+document.getElementById('restart-btn').addEventListener('click', () => {
+  if (net.started) {
+    // 联机: 房主重开, 通知所有人
+    if (net.isHost && net.lobbySnapshot) {
+      netBroadcast({ t: 'restart' });
+      startOnlineGameHost(net.lobbySnapshot);
+    }
+    return;
+  }
+  startGame(gameMode, gameMode === 'arcade' ? players.length || 1 : versusCount);
+});
+document.getElementById('menu-btn').addEventListener('click', () => {
+  if (net.started && net.isHost) netBroadcast({ t: 'end-session' });
+  netCleanup();
+  backToMenu();
+});
+
+// ============ 屏幕自适应缩放 (横竖屏切换平滑) ============
 function fitScreen() {
   const cont = document.getElementById('game-container');
-  const scale = Math.min(window.innerWidth / 804, window.innerHeight / 504, 1);
+  // visualViewport 更准 (排除手机浏览器地址栏高度)
+  const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+  const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+  const scale = Math.min(vw / 804, vh / 504, 1);
   cont.style.transform = 'scale(' + scale + ')';
 }
-window.addEventListener('resize', fitScreen);
+let fitTimer = null;
+function fitScreenDebounced() {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(fitScreen, 100);
+}
+window.addEventListener('resize', fitScreenDebounced);
+window.addEventListener('orientationchange', () => {
+  // 旋转瞬间尺寸不准, 立即清一次按键防卡死, 再延迟重算
+  clearAllKeys();
+  fitScreen();
+  setTimeout(fitScreen, 300);
+});
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', fitScreenDebounced);
+}
 fitScreen();
 
-// ============ 触屏虚拟按键 ============
-const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+// 切后台/失焦时清空按键, 防止按键卡死
+function clearAllKeys() {
+  for (const k in keys) keys[k] = false;
+  document.querySelectorAll('#touch-controls button').forEach(b => b.classList.remove('active'));
+}
+window.addEventListener('blur', clearAllKeys);
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearAllKeys(); });
+
+// ============ 触屏虚拟按键 (控制P1) ============
 const touchControls = document.getElementById('touch-controls');
+const P1CTRL = PLAYER_DEFS[0].ctrl;
+
+// 振动反馈 (支持的设备才有感觉)
+function haptic(ms) {
+  if (navigator.vibrate) {
+    try { navigator.vibrate(ms); } catch (e) {}
+  }
+}
 
 function bindBtn(id, key, oneShot) {
   const el = document.getElementById(id);
@@ -929,6 +1691,7 @@ function bindBtn(id, key, oneShot) {
     e.preventDefault();
     keys[key] = true;
     el.classList.add('active');
+    if (oneShot) haptic(12);           // 攻击键轻震
     if (el.setPointerCapture && e.pointerId !== undefined) {
       try { el.setPointerCapture(e.pointerId); } catch (_) {}
     }
@@ -941,17 +1704,22 @@ function bindBtn(id, key, oneShot) {
   el.addEventListener('pointerdown', press);
   el.addEventListener('pointerup', release);
   el.addEventListener('pointercancel', release);
+  el.addEventListener('pointerleave', release);
   el.addEventListener('contextmenu', e => e.preventDefault());
 }
-bindBtn('btn-left', 'KeyA', false);   // 左移
-bindBtn('btn-right', 'KeyD', false);  // 右移
-bindBtn('btn-jump', 'KeyW', false);   // 跳跃
-bindBtn('btn-block', 'KeyS', false);  // 格挡
-bindBtn('btn-punch', 'KeyJ', true);   // 拳击(单击触发)
-bindBtn('btn-kick', 'KeyK', true);    // 踢腿(单击触发)
-bindBtn('btn-heavy', 'KeyL', true);   // 重拳(单击触发)
+bindBtn('btn-left', P1CTRL.left, false);
+bindBtn('btn-right', P1CTRL.right, false);
+bindBtn('btn-jump', P1CTRL.jump, false);
+bindBtn('btn-block', P1CTRL.block, false);
+bindBtn('btn-punch', P1CTRL.punch, true);
+bindBtn('btn-kick', P1CTRL.kick, true);
+bindBtn('btn-heavy', P1CTRL.heavy, true);
 
-loop();
+// 触屏设备默认 P2-P4 为电脑
+if (isTouchDevice()) {
+  aiSlots = { 2: true, 3: true, 4: true };
+}
+
 </script>
 </body>
 </html>
