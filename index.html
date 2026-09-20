@@ -249,6 +249,9 @@
         <button class="btn small" data-mode="arcade" data-count="3">三人闯关</button>
         <button class="btn small" data-mode="arcade" data-count="4">四人闯关</button>
       </div>
+      <div class="mode-row" style="margin-top:6px">
+        <button class="btn small" id="lives-set" style="border-color:#ff5577;color:#ff5577;background:#ff557722">复活次数: 3</button>
+      </div>
     </div>
 
     <div class="mode-section">
@@ -417,6 +420,10 @@ const SFX = (() => {
     wave:   () => { tone(523, 0.08, 'square', 0.11); setTimeout(() => tone(659, 0.08, 'square', 0.11), 90); setTimeout(() => tone(784, 0.11, 'square', 0.11), 180); },
     win:    () => { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, i === 3 ? 0.24 : 0.09, 'square', 0.13), i * 105)); },
     ui:     () => tone(620, 0.035, 'square', 0.06),
+    pickupHp:   () => { tone(440, 0.07, 'square', 0.12); setTimeout(() => tone(660, 0.09, 'square', 0.12), 70); },
+    pickupLife: () => { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.08, 'triangle', 0.13), i * 70)); },
+    pickupSword:() => { noise(0.12, 0.18, 3000); tone(1200, 0.1, 'sawtooth', 0.1, 600); },
+    respawn:    () => { tone(330, 0.08, 'square', 0.11, 220); setTimeout(() => tone(550, 0.1, 'square', 0.11, 220), 90); },
     toggle: () => { enabled = !enabled; if (enabled) tone(700, 0.05, 'square', 0.1); return enabled; }
   };
 })();
@@ -461,6 +468,10 @@ class Stickman {
     this.height = 60;
     this.maxHp = isPlayer ? 100 : 40;
     this.hp = this.maxHp;
+    this.lives = 0;                 // 复活次数 (闯关模式由开局赋予)
+    this.respawnTimer = 0;          // 重生倒计时
+    this.invincibleTimer = 0;       // 重生无敌帧
+    this.swordTimer = 0;            // 拾取武器: 剑 (剩余帧)
     this.onGround = true;
     this.attacking = false;
     this.attackType = null;
@@ -487,6 +498,8 @@ class Stickman {
     if (this.attackType === 'punch') { range = 50; height = 20; yOffset = -35; }
     if (this.attackType === 'kick') { range = 60; height = 25; yOffset = -20; }
     if (this.attackType === 'heavy') { range = 45; height = 30; yOffset = -40; }
+    // 剑: 攻击距离 +16, 判定更高
+    if (this.swordTimer > 0) { range += 16; height += 8; yOffset -= 4; }
     const x = this.facing > 0 ? this.x + 15 : this.x - 15 - range;
     return { x, y: this.y + yOffset, w: range, h: height };
   }
@@ -508,6 +521,7 @@ class Stickman {
 
   takeDamage(amount, fromDir) {
     if (this.dead) return false;
+    if (this.invincibleTimer > 0) return false;   // 重生无敌
     if (this.blocking && this.blockTimer > 0) {
       amount = Math.floor(amount * 0.2);
       SFX.block();
@@ -525,12 +539,38 @@ class Stickman {
       this.vy = -8;
       this.vx = fromDir * 4;
       SFX.ko();
-      koText = { text: 'K.O.!', timer: 55, color: this.color };
+      // 闯关模式: 有复活次数 → 进入重生倒计时
+      if (gameMode === 'arcade' && this.isPlayer && this.lives > 0) {
+        this.lives--;
+        this.respawnTimer = 150;
+        koText = { text: 'DOWN!', timer: 40, color: this.color };
+      } else {
+        koText = { text: 'K.O.!', timer: 55, color: this.color };
+        if (gameMode === 'versus') slowMo = 70;  // 对战决胜 K.O. 慢动作
+      }
       cam.punch = 0.16;                     // 镜头冲击推近
-      if (gameMode === 'versus') slowMo = 70;  // 对战决胜 K.O. 慢动作
       return true;
     }
     return false;
+  }
+
+  // 复活: 满血回到出生区域, 短暂无敌
+  respawn() {
+    this.dead = false;
+    this.hp = this.maxHp;
+    this.vy = 0; this.vx = 0;
+    this.y = GROUND_Y;
+    this.x = arcadeX(players.indexOf(this) >= 0 ? players.indexOf(this) : 0) + rand(-30, 30);
+    this.x = Math.max(60, Math.min(W - 60, this.x));
+    this.onGround = true;
+    this.attacking = false; this.attackType = null; this.attackTimer = 0;
+    this.deathTimer = 0; this.hitFlash = 0;
+    this.blocking = false; this.blockTimer = 0;
+    this.invincibleTimer = 120;
+    spawnDust(this.x, GROUND_Y, 8);
+    spawnParticles(this.x, this.y - 40, this.color, 12);
+    SFX.respawn();
+    floatTexts.push({ x: this.x, y: this.y - 100, txt: 'REVIVE!', color: '#00ff88', t: 50 });
   }
 
   update() {
@@ -545,8 +585,15 @@ class Stickman {
         this.vy = 0;
         this.vx *= 0.5;
       }
+      // 重生倒计时
+      if (this.respawnTimer > 0) {
+        this.respawnTimer--;
+        if (this.respawnTimer === 0) this.respawn();
+      }
       return;
     }
+    if (this.invincibleTimer > 0) this.invincibleTimer--;
+    if (this.swordTimer > 0) this.swordTimer--;
 
     this.y += this.vy;
     if (this.y < GROUND_Y) {
@@ -638,10 +685,21 @@ class Stickman {
     }
   }
 
+  // 关节点高光 (肘/膝白色小圆, 增强肢体结构辨识)
+  joint(g, jx, jy) {
+    g.fillStyle = '#ffffff99';
+    g.beginPath();
+    g.arc(jx, jy, 2.2, 0, Math.PI * 2);
+    g.fill();
+  }
+
   draw(ctx) {
     const x = this.x, y = this.y;
     const f = this.facing;
     const c = this.hitFlash > 0 ? '#ffffff' : this.color;
+    const t = performance.now() / 1000;
+    const moving = this.onGround && Math.abs(this.vx) > 0.5;
+    const breath = (!moving && this.onGround && !this.attacking) ? Math.sin(t * 3.2) * 1.1 : 0;
 
     ctx.save();
     ctx.strokeStyle = c;
@@ -649,127 +707,264 @@ class Stickman {
     ctx.lineWidth = 4;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
+    // 重生无敌: 闪烁半透明
+    if (this.invincibleTimer > 0 && this.invincibleTimer % 8 < 4) ctx.globalAlpha = 0.45;
 
     if (this.dead) {
       ctx.translate(x, y);
       ctx.rotate(this.deathTimer < 30 ? -f * 1.4 : 0);
+      // 头 + 躯干
+      ctx.beginPath(); ctx.arc(0, -50, 10, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -40); ctx.lineTo(0, -10); ctx.stroke();
+      // X 眼 (K.O.)
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.arc(0, -50, 10, 0, Math.PI*2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(0, -40); ctx.lineTo(0, -10);
+      ctx.moveTo(f * 3, -54); ctx.lineTo(f * 7, -50);
+      ctx.moveTo(f * 7, -54); ctx.lineTo(f * 3, -50);
       ctx.stroke();
-      ctx.lineWidth = 3;
+      // 瘫软的手臂 (双段)
+      ctx.lineWidth = 3.5;
       ctx.beginPath();
-      ctx.moveTo(0, -35); ctx.lineTo(-15, -25);
-      ctx.moveTo(0, -35); ctx.lineTo(15, -30);
+      ctx.moveTo(0, -36); ctx.lineTo(-14, -42); ctx.lineTo(-20, -36);
+      ctx.moveTo(0, -36); ctx.lineTo(11, -30); ctx.lineTo(17, -34);
       ctx.stroke();
+      this.joint(ctx, -14, -42); this.joint(ctx, 11, -30);
+      // 瘫软的腿 (双段)
       ctx.beginPath();
-      ctx.moveTo(0, -10); ctx.lineTo(-12, 0); ctx.lineTo(8, 0);
+      ctx.moveTo(0, -10); ctx.lineTo(-12, -4); ctx.lineTo(-19, -9);
+      ctx.moveTo(0, -10); ctx.lineTo(9, -4); ctx.lineTo(16, -10);
       ctx.stroke();
+      this.joint(ctx, -12, -4); this.joint(ctx, 9, -4);
       ctx.restore();
       return;
     }
 
-    // 头
-    ctx.beginPath();
-    ctx.arc(x, y - 55, 10, 0, Math.PI*2);
-    ctx.stroke();
+    const hy = y - 52 + breath;          // 头心
+    const neckY = y - 42 + breath;
+    const hipY = y - 22 + breath * 0.5;
 
-    // 身体
-    ctx.beginPath();
-    ctx.moveTo(x, y - 45);
-    ctx.lineTo(x, y - 25);
-    ctx.stroke();
-
-    // 腿
-    let legPhase = this.onGround ? Math.sin(this.walkPhase) * 10 : (this.jumpFrame === 0 ? -8 : 12);
-    ctx.beginPath();
-    ctx.moveTo(x, y - 25);
-    ctx.lineTo(x + legPhase, y);
-    ctx.moveTo(x, y - 25);
-    ctx.lineTo(x - legPhase * 0.7, y);
-    ctx.stroke();
-
-    // 手臂
-    if (this.blocking && this.blockTimer > 0) {
-      const armL = { x: x - f * 15, y: y - 38 };
-      const armR = { x: x - f * 20, y: y - 35 };
-      ctx.beginPath();
-      ctx.moveTo(x, y - 40); ctx.lineTo(armL.x, armL.y);
-      ctx.moveTo(x, y - 40); ctx.lineTo(armR.x, armR.y);
-      ctx.stroke();
-      ctx.fillStyle = '#00ffff';
-      ctx.globalAlpha = 0.3;
-      ctx.beginPath();
-      ctx.arc(x - f * 18, y - 38, 14, 0, Math.PI*2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    } else if (this.attacking) {
-      let armExtend = 0, armY = -40;
-      if (this.attackType === 'punch') { armExtend = 25; armY = -35; }
-      else if (this.attackType === 'kick') { armExtend = 0; armY = -40; }
-      else if (this.attackType === 'heavy') { armExtend = 20; armY = -42; }
-
-      ctx.beginPath();
-      ctx.moveTo(x, y - 40);
-      ctx.lineTo(x + f * (15 + armExtend), y + armY);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(x, y - 40);
-      ctx.lineTo(x - f * 12, y - 35);
-      ctx.stroke();
-
-      if (this.attackType === 'kick') {
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(x, y - 25);
-        ctx.lineTo(x + f * 35, y - 18);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x, y - 25);
-        ctx.lineTo(x - f * 8, y);
-        ctx.stroke();
+    // ---- 腿: 髋→膝→脚 双段弯曲 ----
+    let kneeF, footF, kneeB, footB;
+    if (this.attacking && this.attackType === 'kick') {
+      const prog = this.attackTimer > 5 ? 1 : 0.35;
+      kneeF = { x: x + f * (4 + 13 * prog), y: y - 20 };
+      footF = { x: x + f * (8 + 28 * prog), y: y - 16 };
+      kneeB = { x: x - f * 5, y: y - 13 };
+      footB = { x: x - f * 8, y };
+    } else if (!this.onGround) {
+      if (this.jumpFrame === 0) {        // 上升: 收腿团身
+        kneeF = { x: x + f * 10, y: y - 15 }; footF = { x: x + f * 4, y: y - 7 };
+        kneeB = { x: x - f * 7, y: y - 11 }; footB = { x: x - f * 12, y: y - 3 };
+      } else {                          // 下落: 迈步预备落地
+        kneeF = { x: x + f * 8, y: y - 12 }; footF = { x: x + f * 13, y: y + 2 };
+        kneeB = { x: x - f * 4, y: y - 10 }; footB = { x: x - f * 10, y: y + 3 };
       }
+    } else if (moving) {
+      const sw = Math.sin(this.walkPhase);
+      const liftF = Math.max(0, Math.sin(this.walkPhase)) * 5;
+      const liftB = Math.max(0, -Math.sin(this.walkPhase)) * 5;
+      kneeF = { x: x + sw * 6, y: y - 12 };
+      footF = { x: x + sw * 11, y: y - liftF };
+      kneeB = { x: x - sw * 5, y: y - 12 };
+      footB = { x: x - sw * 9, y: y - liftB };
+    } else {                            // 待机: 拳击开立步
+      kneeF = { x: x + f * 4, y: y - 12 }; footF = { x: x + f * 8, y };
+      kneeB = { x: x - f * 2, y: y - 12 }; footB = { x: x - f * 6, y };
+    }
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x, hipY); ctx.lineTo(kneeF.x, kneeF.y); ctx.lineTo(footF.x, footF.y);
+    ctx.moveTo(x, hipY); ctx.lineTo(kneeB.x, kneeB.y); ctx.lineTo(footB.x, footB.y);
+    ctx.stroke();
+    this.joint(ctx, kneeF.x, kneeF.y);
+    this.joint(ctx, kneeB.x, kneeB.y);
 
-      if (this.attackTimer > 5) {
-        ctx.fillStyle = '#ffff00';
-        ctx.globalAlpha = 0.4;
-        const ab = this.getAttackBox();
-        if (ab) {
-          ctx.beginPath();
-          ctx.arc(ab.x + ab.w/2, ab.y + ab.h/2, 8 + Math.random()*6, 0, Math.PI*2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
+    // ---- 躯干 (略粗) ----
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(x, neckY); ctx.lineTo(x, hipY);
+    ctx.stroke();
+
+    // ---- 手臂: 肩→肘→拳 双段 ----
+    let elbowF, fistF, elbowB, fistB, fistR = 4.5;
+    if (this.blocking && this.blockTimer > 0) {
+      elbowF = { x: x - f * 5, y: y - 31 + breath }; fistF = { x: x - f * 14, y: y - 37 + breath };
+      elbowB = { x: x - f * 8, y: y - 29 + breath }; fistB = { x: x - f * 17, y: y - 32 + breath };
+    } else if (this.attacking) {
+      const prog = this.attackTimer > 5 ? 1 : 0.4;
+      if (this.attackType === 'punch') {
+        elbowF = { x: x + f * (8 + 9 * prog), y: y - 33 + breath };
+        fistF = { x: x + f * (12 + 19 * prog), y: y - 36 + breath };
+        fistR = 5.5;
+        elbowB = { x: x - f * 6, y: y - 31 + breath }; fistB = { x: x - f * 5, y: y - 40 + breath };
+      } else if (this.attackType === 'kick') {
+        elbowF = { x: x - f * 6, y: y - 33 + breath }; fistF = { x: x - f * 10, y: y - 38 + breath };
+        elbowB = { x: x - f * 9, y: y - 30 + breath }; fistB = { x: x - f * 14, y: y - 27 + breath };
+      } else {                          // heavy: 大摆拳
+        elbowF = { x: x + f * (9 + 10 * prog), y: y - 38 + breath };
+        fistF = { x: x + f * (10 + 26 * prog), y: y - 42 + breath };
+        fistR = 7;
+        elbowB = { x: x - f * 6, y: y - 30 + breath }; fistB = { x: x - f * 4, y: y - 36 + breath };
       }
     } else {
-      let armSwing = this.onGround ? Math.sin(this.walkPhase + Math.PI) * 8 : 0;
+      const asw = moving ? Math.sin(this.walkPhase + Math.PI) * 5 : 0;
+      // 拳击护头姿态 (生动 & 易识别朝向)
+      elbowF = { x: x + f * 5 + asw * 0.6, y: y - 33 + breath };
+      fistF = { x: x + f * 10 + asw, y: y - 41 + breath };
+      elbowB = { x: x - f * 7 - asw * 0.6, y: y - 31 + breath };
+      fistB = { x: x - f * 4 - asw, y: y - 37 + breath };
+    }
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x, neckY + 3); ctx.lineTo(elbowF.x, elbowF.y); ctx.lineTo(fistF.x, fistF.y);
+    ctx.moveTo(x, neckY + 3); ctx.lineTo(elbowB.x, elbowB.y); ctx.lineTo(fistB.x, fistB.y);
+    ctx.stroke();
+    this.joint(ctx, elbowF.x, elbowF.y);
+    this.joint(ctx, elbowB.x, elbowB.y);
+    // 拳头 (实心圆 + 白色高光点)
+    ctx.fillStyle = c;
+    ctx.beginPath(); ctx.arc(fistF.x, fistF.y, fistR, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(fistB.x, fistB.y, 4.2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffffcc';
+    ctx.beginPath(); ctx.arc(fistF.x - 1.5, fistF.y - 1.5, 1.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(fistB.x - 1.3, fistB.y - 1.3, 1.2, 0, Math.PI * 2); ctx.fill();
+
+    // ---- 剑 (拾取武器): 握在前手, 剩余<2秒闪烁 ----
+    if (this.swordTimer > 0 && (this.swordTimer > 120 || this.swordTimer % 16 < 10)) {
+      const sx = fistF.x, sy = fistF.y;
+      const ang = this.attacking && this.attackType !== 'kick' ? f * 0.12 : -f * 0.5;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(ang);
+      // 剑刃 (银色 + 白色刃口)
+      ctx.strokeStyle = '#c8c8e8';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(f * 6, 0); ctx.lineTo(f * 26, 0); ctx.stroke();
+      ctx.strokeStyle = '#ffffffee';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(f * 7, -1.6); ctx.lineTo(f * 25, -1.6); ctx.stroke();
+      // 剑格 + 剑柄
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(f * 5, -4); ctx.lineTo(f * 5, 4); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(f * 2, 0); ctx.lineTo(f * 5, 0); ctx.stroke();
+      ctx.restore();
+      // 挥剑光弧 (攻击瞬间)
+      if (this.attacking && this.attackTimer > 4 && this.attackType !== 'kick') {
+        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 26, f > 0 ? -0.9 : Math.PI - 0.35, f > 0 ? 0.35 : Math.PI + 0.9);
+        ctx.stroke();
+      }
+    }
+
+    // ---- 头 + 眼睛 + 忍者头带 ----
+    ctx.fillStyle = c;
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(x, hy, 10, 0, Math.PI * 2); ctx.stroke();
+    // 眼睛 (朝向前方, 白底黑瞳)
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(x + f * 4.5, hy - 2, 2.1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000000aa';
+    ctx.beginPath(); ctx.arc(x + f * 5.2, hy - 2, 1, 0, Math.PI * 2); ctx.fill();
+    // 头带 (白色束带 + 两条飘带随动作摆动)
+    ctx.strokeStyle = '#ffffffdd';
+    ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(x - 9, hy - 3); ctx.lineTo(x + 9, hy - 3); ctx.stroke();
+    const rib = (len, off, ph) => {
+      const wob = Math.sin(t * 7 + ph) * 3;
       ctx.beginPath();
-      ctx.moveTo(x, y - 40);
-      ctx.lineTo(x + armSwing, y - 28);
-      ctx.moveTo(x, y - 40);
-      ctx.lineTo(x - armSwing, y - 28);
+      ctx.moveTo(x - f * 8, hy - 4 + off);
+      ctx.quadraticCurveTo(x - f * (12 + len * 0.5), hy - 7 + off + wob * 0.4,
+                           x - f * (16 + len), hy + 1 + off + wob);
       ctx.stroke();
+    };
+    rib(6, 0, 0);
+    rib(8, 3, 1.4);
+    ctx.strokeStyle = c;
+
+    // 格挡护罩
+    if (this.blocking && this.blockTimer > 0) {
+      ctx.strokeStyle = '#00ffff';
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x - f * 16, y - 38 + breath, 17, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = '#00ffff';
+      ctx.beginPath(); ctx.arc(x - f * 16, y - 38 + breath, 17, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = c;
+    }
+
+    // 攻击光效
+    if (this.attacking && this.attackTimer > 5) {
+      ctx.fillStyle = '#ffff00';
+      ctx.globalAlpha = 0.4;
+      const ab = this.getAttackBox();
+      if (ab) {
+        ctx.beginPath();
+        ctx.arc(ab.x + ab.w / 2, ab.y + ab.h / 2, 8 + Math.random() * 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
 
     ctx.restore();
 
-    // 伤害飘字
+    // 伤害飘字 (重击更大更醒目)
     if (this.hitFlash > 0 && this.dmgAmount > 0) {
-      ctx.fillStyle = '#ff3333';
-      ctx.font = 'bold 16px Courier New';
+      const crit = this.dmgAmount >= 15;
+      ctx.fillStyle = crit ? '#ffaa00' : '#ff3333';
+      ctx.font = 'bold ' + (crit ? 20 : 15) + 'px Courier New';
+      ctx.strokeStyle = '#00000088';
+      ctx.lineWidth = 3;
       ctx.textAlign = 'center';
-      ctx.fillText('-' + this.dmgAmount, x, y - 86 - (10 - this.hitFlash) * 2);
+      const fy = y - 108 - (10 - this.hitFlash) * 2;
+      ctx.strokeText('-' + this.dmgAmount, x, fy);
+      ctx.fillText('-' + this.dmgAmount, x, fy);
     }
 
-    // 玩家名牌
+    // 玩家名牌: 胶囊徽章 + 身份标签 (YOU/CPU/NET)
     if (this.name) {
-      ctx.fillStyle = this.color;
-      ctx.font = 'bold 11px Courier New';
+      const isYou = !!this.ctrl || !!this._isSelf;   // 联机客户端自己的角色也标 YOU
+      const isNet = !isYou && !!this.remoteInput;
+      const tag = isYou ? 'YOU' : (isNet ? 'NET' : (this.isPlayer ? 'CPU' : ''));
+      const tagColor = isYou ? '#00ff88' : (isNet ? '#00aaff' : '#ff8800');
       ctx.textAlign = 'center';
-      ctx.fillText(this.name, x, y - 72);
+      ctx.font = 'bold 11px Courier New';
+      const tw = ctx.measureText(this.name).width;
+      const bw = tw + 14, bx = x - bw / 2, by = y - 104, bh = 16;
+      // 徽章底 + 角色色描边
+      ctx.fillStyle = 'rgba(5,5,10,0.7)';
+      rrect(ctx, bx, by, bw, bh, 8); ctx.fill();
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 1.5;
+      rrect(ctx, bx, by, bw, bh, 8); ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(this.name, x, by + 12);
+      // 右下角身份小标
+      if (tag) {
+        ctx.font = 'bold 9px Courier New';
+        const tw2 = ctx.measureText(tag).width;
+        const bw2 = tw2 + 8, bx2 = x + bw / 2 - 6, by2 = by + bh - 5;
+        ctx.fillStyle = tagColor;
+        rrect(ctx, bx2, by2, bw2, 12, 6); ctx.fill();
+        ctx.fillStyle = '#000000cc';
+        ctx.fillText(tag, bx2 + bw2 / 2, by2 + 9);
+      }
+      // 自我定位箭头: 名牌上方绿色脉冲三角 (联机混战中第一时间找到自己)
+      const isPrimary = !!this._isSelf || (!!this.ctrl && this === fighters[0]);
+      if (isPrimary && !this.dead) {
+        const bob = Math.sin(performance.now() / 180) * 2.5;
+        ctx.fillStyle = '#00ff88';
+        ctx.beginPath();
+        ctx.moveTo(x - 6, by - 14 + bob);
+        ctx.lineTo(x + 6, by - 14 + bob);
+        ctx.lineTo(x, by - 5 + bob);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
   }
 }
@@ -793,6 +988,10 @@ let paused = false;                // 暂停
 let slowMo = 0;                    // K.O. 慢动作 (帧数)
 let roundTimer = 0;                // 对战回合计时 (帧, 99秒)
 const cam = { x: 400, y: 250, zoom: 1, punch: 0, init: false };  // 动态镜头
+let reviveLives = 3;               // 闯关模式复活次数 (菜单可调: 1/2/3/∞)
+let pickups = [];                  // 场上道具 {x,y,type,t}
+let pickupTimer = 0;               // 定时刷新计时
+let floatTexts = [];               // 漂浮提示文字 {x,y,txt,color,t}
 
 const enemyColors = ['#ff4444', '#ff8800', '#ff22aa', '#aa44ff'];
 const arcadeX = i => [W/2, W/2 - 70, W/2 + 70, W/2 - 140][i % 4];
@@ -1031,6 +1230,7 @@ function netMakeClientFighters(plist) {
     const f = new Stickman(versusX(i), p.color, true, null);
     f.name = p.name;
     f.maxHp = 100; f.hp = 100; f.playerDmg = true;
+    if (i === net.idx) f._isSelf = true;   // 标记自己 → 名牌 YOU + 箭头 + HUD 置顶
     return f;
   });
   players = []; enemies = []; particles = [];
@@ -1120,6 +1320,7 @@ function startGame(mode, count) {
   waveTransition = 0; roundEndTimer = 0; versusWinner = null;
   hitStop = 0; combo = 0; comboTimer = 0; koText = null;
   paused = false; slowMo = 0; roundTimer = gameMode === 'versus' ? 99 * 60 : 0; cam.init = false;
+  pickups = []; floatTexts = []; pickupTimer = 360;
   document.getElementById('pause-screen').classList.add('hidden');
   gameState = 'playing';
   tryAutoFullscreen();
@@ -1130,6 +1331,7 @@ function startGame(mode, count) {
       const d = PLAYER_DEFS[i];
       const p = new Stickman(arcadeX(i), d.color, true, d.ctrl);
       p.name = d.name;
+      p.lives = reviveLives;   // 开局赋予菜单设定的复活次数
       players.push(p);
       fighters.push(p);
     }
@@ -1287,10 +1489,14 @@ function handlePlayerInput(f) {
 
 // ============ 战斗判定 ============
 function getDamageOf(attacker) {
+  let dmg;
   if (attacker.playerDmg || attacker.isPlayer) {
-    return attacker.attackType === 'punch' ? 8 : attacker.attackType === 'kick' ? 12 : 20;
+    dmg = attacker.attackType === 'punch' ? 8 : attacker.attackType === 'kick' ? 12 : 20;
+  } else {
+    dmg = attacker.attackType === 'punch' ? 5 : attacker.attackType === 'kick' ? 8 : 14;
   }
-  return attacker.attackType === 'punch' ? 5 : attacker.attackType === 'kick' ? 8 : 14;
+  if (attacker.swordTimer > 0) dmg = Math.round(dmg * 1.5);   // 剑: 伤害×1.5
+  return dmg;
 }
 
 function checkCombat() {
@@ -1335,6 +1541,7 @@ function checkCombat() {
         if (gameMode === 'arcade' && !tar.isPlayer) {
           kills++;
           score += 100 * wave;
+          maybeDropPickup(tar.x);           // 敌人死亡掉落道具
         }
         spawnParticles(tar.x, tar.y - 40, tar.color, 20);
         cameraShake = 10;
@@ -1347,8 +1554,8 @@ function checkCombat() {
 // ============ 胜负判定 ============
 function checkRoundEnd() {
   if (gameMode === 'arcade') {
-    // 所有玩家死亡 → 失败
-    if (players.every(p => p.dead)) { gameOver(false); return; }
+    // 所有玩家死亡、无复活次数且不在重生中 → 失败
+    if (players.length && players.every(p => p.dead && p.lives <= 0 && p.respawnTimer <= 0)) { gameOver(false); return; }
     // 波次
     const alive = enemies.filter(e => !e.dead).length;
     if (alive === 0 && waveTransition <= 0) waveTransition = 90;
@@ -1452,11 +1659,154 @@ function update() {
     fighters = fighters.filter(f => !(f.dead && f.deathTimer <= 0));
   }
 
+  updatePickups();
+  updateFloatTexts();
   updateParticles();
   if (cameraShake > 0) cameraShake *= 0.85;
 
   // 联机主机: 广播战场状态
   if (net.started && net.isHost) netMaybeBroadcast();
+}
+
+// ============ 道具系统 (血包/1UP/剑) ============
+function spawnPickup(x, type) {
+  if (pickups.length >= 4) return;
+  pickups.push({ x: Math.max(50, Math.min(W - 50, x)), y: GROUND_Y, type, t: Math.random() * 10 });
+}
+
+// 敌人死亡掉落 (闯关模式)
+function maybeDropPickup(x) {
+  if (gameMode !== 'arcade' || Math.random() > 0.28) return;
+  const r = Math.random();
+  spawnPickup(x, r < 0.5 ? 'hp' : (r < 0.82 ? 'sword' : 'life'));
+}
+
+function updatePickups() {
+  // 定时刷新 (闯关每10秒, 本地对战每14秒; 联机不开道具)
+  if (!net.started && gameState === 'playing') {
+    pickupTimer--;
+    const maxOnField = gameMode === 'arcade' ? 3 : 2;
+    if (pickupTimer <= 0 && pickups.length < maxOnField) {
+      const r = Math.random();
+      const type = gameMode === 'arcade'
+        ? (r < 0.5 ? 'hp' : (r < 0.82 ? 'sword' : 'life'))
+        : (r < 0.6 ? 'hp' : 'sword');
+      spawnPickup(rand(80, W - 80), type);
+      pickupTimer = gameMode === 'arcade' ? 600 : 840;
+    }
+  }
+  // 拾取判定: 闯关仅玩家; 本地对战所有人
+  for (let i = pickups.length - 1; i >= 0; i--) {
+    const pk = pickups[i];
+    pk.t++;
+    const canGrab = gameMode === 'arcade' ? f => f.isPlayer : () => true;
+    for (const f of fighters) {
+      if (f.dead || !canGrab(f)) continue;
+      if (Math.abs(f.x - pk.x) < 30 && Math.abs((f.y - 30) - (pk.y - 30)) < 50) {
+        applyPickup(f, pk.type);
+        pickups.splice(i, 1);
+        break;
+      }
+    }
+  }
+}
+
+function applyPickup(f, type) {
+  if (type === 'hp') {
+    f.hp = Math.min(f.maxHp, f.hp + Math.ceil(f.maxHp * 0.4));
+    SFX.pickupHp();
+    floatTexts.push({ x: f.x, y: f.y - 92, txt: '+HP', color: '#33ff66', t: 45 });
+  } else if (type === 'life') {
+    if (f.lives !== Infinity) f.lives++;
+    SFX.pickupLife();
+    floatTexts.push({ x: f.x, y: f.y - 92, txt: '1UP!', color: '#00ff88', t: 55 });
+  } else if (type === 'sword') {
+    f.swordTimer = 600;   // 10秒
+    SFX.pickupSword();
+    floatTexts.push({ x: f.x, y: f.y - 92, txt: 'SWORD!', color: '#ffd700', t: 55 });
+  }
+  spawnParticles(f.x, f.y - 40, '#ffffff', 6);
+}
+
+function drawPickups() {
+  const t = performance.now() / 1000;
+  pickups.forEach(pk => {
+    const bob = Math.sin(t * 3 + pk.t) * 4;
+    const py = pk.y - 16 + bob;
+    // 光晕
+    const glow = type => type === 'hp' ? 'rgba(255,60,60,' : type === 'life' ? 'rgba(0,255,130,' : 'rgba(255,210,0,';
+    ctx.fillStyle = glow(pk.type) + (0.12 + 0.08 * (Math.sin(t * 4 + pk.t) * 0.5 + 0.5)).toFixed(2) + ')';
+    ctx.beginPath(); ctx.arc(pk.x, py, 18, 0, Math.PI * 2); ctx.fill();
+    if (pk.type === 'hp') {
+      // 白色药箱 + 红十字
+      ctx.fillStyle = '#f0f0f5';
+      rrect(ctx, pk.x - 9, py - 8, 18, 15, 3); ctx.fill();
+      ctx.strokeStyle = '#999'; ctx.lineWidth = 1;
+      rrect(ctx, pk.x - 9, py - 8, 18, 15, 3); ctx.stroke();
+      ctx.fillStyle = '#ff3333';
+      ctx.fillRect(pk.x - 2, py - 6, 4, 11);
+      ctx.fillRect(pk.x - 6, py - 3.5, 12, 4);
+    } else if (pk.type === 'life') {
+      // 绿色爱心 1UP
+      ctx.fillStyle = '#00e05a';
+      ctx.beginPath();
+      ctx.moveTo(pk.x, py + 8);
+      ctx.bezierCurveTo(pk.x - 12, py - 2, pk.x - 7, py - 10, pk.x, py - 4);
+      ctx.bezierCurveTo(pk.x + 7, py - 10, pk.x + 12, py - 2, pk.x, py + 8);
+      ctx.fill();
+      ctx.fillStyle = '#ffffffcc';
+      ctx.beginPath(); ctx.arc(pk.x - 3.5, py - 4.5, 1.8, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // 金色宝剑 (斜插, 待拾取)
+      ctx.save();
+      ctx.translate(pk.x, py);
+      ctx.rotate(-0.6);
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(0, 9); ctx.lineTo(0, -11); ctx.stroke();
+      ctx.strokeStyle = '#ffffffaa';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(1, -10); ctx.lineTo(1, 8); ctx.stroke();
+      ctx.strokeStyle = '#ff8800';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(-4, 4); ctx.lineTo(4, 4); ctx.stroke();
+      ctx.restore();
+    }
+  });
+}
+
+function updateFloatTexts() {
+  for (let i = floatTexts.length - 1; i >= 0; i--) {
+    const ft = floatTexts[i];
+    ft.t--; ft.y -= 0.55;
+    if (ft.t <= 0) floatTexts.splice(i, 1);
+  }
+}
+
+function drawFloatTexts() {
+  floatTexts.forEach(ft => {
+    ctx.globalAlpha = Math.min(1, ft.t / 18);
+    ctx.fillStyle = ft.color;
+    ctx.font = 'bold 13px Courier New';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#00000099';
+    ctx.lineWidth = 2.5;
+    ctx.strokeText(ft.txt, ft.x, ft.y);
+    ctx.fillText(ft.txt, ft.x, ft.y);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// 圆角矩形路径 (名牌/血条通用)
+function rrect(g, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
 }
 
 const BG_M = 340;   // 背景外延边距 (镜头拉远时四周仍有景物)
@@ -1509,66 +1859,180 @@ function drawBackground() {
 }
 
 function drawHud() {
-  // 玩家血条 (顶部) — 闯关: 人类玩家; 对战: 全部参战者
-  const hpList = gameMode === 'versus' ? fighters : players;
-  const barW = Math.min(170, Math.floor(W / 2) - 44), barH = 10;
+  // ===== 玩家血条 (格斗游戏布局: 自己永远左上 + 座位徽章 + 伤害残影) =====
+  let hpList = gameMode === 'versus' ? fighters : players;
+  // 联机客户端: 把自己的血条固定到左上第一位 (无需在四角中寻找自己)
+  if (gameMode === 'versus' && net.started && !net.isHost) {
+    const si = hpList.findIndex(f => f._isSelf);
+    if (si > 0) hpList = [hpList[si]].concat(hpList.filter((_, k) => k !== si));
+  }
+  const barW = Math.min(210, Math.floor(W / 2) - 52), barH = 14;
   const positions = [
-    { x: 12, y: 10 }, { x: W - 12 - barW, y: 10 },
-    { x: 12, y: 32 }, { x: W - 12 - barW, y: 32 },
+    { x: 12, y: 10, right: false }, { x: W - 12 - barW, y: 10, right: true },
+    { x: 12, y: 32, right: false }, { x: W - 12 - barW, y: 32, right: true },
   ];
   hpList.forEach((p, i) => {
     if (i >= 4) return;
     const pos = positions[i];
-    ctx.font = 'bold 11px Courier New';
-    ctx.textAlign = 'left';
+    const bx = pos.x, by = pos.y, R = pos.right;
+    const seat = 'P' + (fighters.indexOf(p) + 1);   // 全局座位号 (联机中不随 HUD 排序变化)
+    const isSelfBar = !!p._isSelf || (!!p.ctrl && p === fighters[0]);   // 自己的条绿色高亮
+    // 底槽 (圆角深色)
+    ctx.fillStyle = '#1a1a2e';
+    rrect(ctx, bx, by, barW, barH, 5); ctx.fill();
+    // 伤害残影: 白色滞后条, 快速掉血时清晰显示"刚才掉了多少"
+    const hr = Math.max(0, p.hp / p.maxHp);
+    const g0 = (p._hudHp === undefined) ? p.hp : p._hudHp;
+    p._hudHp = Math.max(p.hp, g0 + (p.hp - g0) * 0.12);
+    const gr = Math.max(hr, Math.min(1, p._hudHp / p.maxHp));
+    if (gr > hr) {
+      ctx.fillStyle = p.dead ? '#555555b0' : '#ffffffb0';
+      const gw = Math.max(2, barW * (gr - hr));
+      const gx = R ? bx + barW - barW * gr : bx + barW * hr;
+      rrect(ctx, gx, by, gw, barH, 5); ctx.fill();
+    }
+    // 血量填充: 左条从左端填充 / 右条从右端填充 (格斗惯例: 向画面中心消耗)
+    if (hr > 0) {
+      const fw = Math.max(5, barW * hr);
+      const fx = R ? bx + barW - fw : bx;
+      ctx.fillStyle = p.color;
+      rrect(ctx, fx, by, fw, barH, 5); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      rrect(ctx, fx + (R ? 2 : 0), by + 1.5, Math.max(0, fw - 2), barH * 0.38, 4); ctx.fill();
+      if (hr < 0.3 && !p.dead) {   // 低血警报
+        ctx.fillStyle = 'rgba(255,40,40,' + (0.2 + 0.3 * (Math.sin(performance.now() / 140) * 0.5 + 0.5)).toFixed(2) + ')';
+        rrect(ctx, fx, by, fw, barH, 5); ctx.fill();
+      }
+    }
+    // 分段刻度 + 描边 (自己的条绿色加粗, 一眼锁定自身状态)
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    for (let k = 1; k <= 3; k++) ctx.fillRect(bx + barW * k / 4 - 0.5, by, 1, barH);
+    ctx.strokeStyle = isSelfBar ? '#00ff88' : p.color + '99';
+    ctx.lineWidth = isSelfBar ? 2 : 1;
+    rrect(ctx, bx, by, barW, barH, 5); ctx.stroke();
+    // 座位徽章: 条内外端角色色小牌 P1-P4 (颜色与角色身体一致, 联机识别核心)
+    const chipW = 24, chipX = R ? bx + barW - 3 - chipW : bx + 3;
     ctx.fillStyle = p.color;
-    // 名字过长截断, 不遮挡血条
-    let nm = p.name || '';
-    while (ctx.measureText(nm).width > 62 && nm.length > 2) nm = nm.slice(0, -1);
-    ctx.fillText(nm, pos.x, pos.y + 9);
-    const nw = ctx.measureText(nm).width + 8;
-    // 血条底 + 当前血量 + 描边
-    ctx.fillStyle = '#222233';
-    ctx.fillRect(pos.x + nw, pos.y, barW - nw, barH);
-    ctx.fillStyle = p.color;
-    ctx.fillRect(pos.x + nw, pos.y, (barW - nw) * Math.max(0, p.hp / p.maxHp), barH);
-    ctx.strokeStyle = p.color + '55';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(pos.x + nw - 0.5, pos.y - 0.5, barW - nw + 1, barH + 1);
+    rrect(ctx, chipX, by + 2, chipW, barH - 4, 4); ctx.fill();
+    ctx.strokeStyle = '#000000aa'; ctx.lineWidth = 1;
+    rrect(ctx, chipX, by + 2, chipW, barH - 4, 4); ctx.stroke();
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 10px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText(seat, chipX + chipW / 2, by + barH - 3.5);
+    // 名字 (条内、徽章旁, 外端对齐; 死亡后淡出避免与 K.O. 重叠)
+    ctx.font = 'bold 10px Courier New';
+    ctx.textAlign = R ? 'right' : 'left';
+    ctx.globalAlpha = p.dead ? 0.45 : 1;
+    const nx = R ? bx + barW - 3 - chipW - 6 : bx + 3 + chipW + 6;
+    ctx.strokeStyle = '#000000bb'; ctx.lineWidth = 2.5;
+    ctx.strokeText(p.name || '', nx, by + 10.5);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(p.name || '', nx, by + 10.5);
+    ctx.globalAlpha = 1;
+    // 命数图标 (条内端 ♥×N / ∞) — 仅闯关模式, 且死亡重生中让位给倒计时
+    if (gameMode === 'arcade' && (p.lives > 0 || p.lives === Infinity) && !(p.dead && p.respawnTimer > 0)) {
+      ctx.font = 'bold 11px Courier New';
+      ctx.textAlign = R ? 'left' : 'right';
+      ctx.strokeStyle = '#000000bb';
+      ctx.lineWidth = 2.5;
+      const ls = '♥' + (p.lives === Infinity ? '∞' : p.lives);
+      ctx.strokeText(ls, R ? bx + 6 : bx + barW - 6, by + 11);
+      ctx.fillStyle = '#ff5577';
+      ctx.fillText(ls, R ? bx + 6 : bx + barW - 6, by + 11);
+    }
+    // 剑剩余时间 (条下方小能量条, 随左右侧向对齐)
+    if (p.swordTimer > 0) {
+      const sw = 54, sx = R ? bx + barW - sw : bx;
+      const fr = p.swordTimer / 600;
+      const blink = p.swordTimer < 120 && p.swordTimer % 16 >= 10;
+      if (!blink) {
+        ctx.fillStyle = '#333';
+        rrect(ctx, sx, by + barH + 3, sw, 4, 2); ctx.fill();
+        ctx.fillStyle = '#ffd700';
+        rrect(ctx, sx, by + barH + 3, sw * fr, 4, 2); ctx.fill();
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 8px Courier New';
+        ctx.textAlign = 'left';
+        ctx.fillText('🗡', sx + sw + 3, by + barH + 8);
+      }
+    }
+    // 重生倒计时 (条内端, 替代命数位置)
+    if (p.dead && p.respawnTimer > 0) {
+      const secs = Math.ceil(p.respawnTimer / 60);
+      ctx.font = 'bold 10px Courier New';
+      ctx.textAlign = R ? 'left' : 'right';
+      ctx.fillStyle = '#00ff88';
+      ctx.fillText('重生 ' + secs + 's', R ? bx + 6 : bx + barW - 6, by + 10.5);
+    }
+    // K.O. 盖章 (对战模式死亡角色, 居中红字 + 微震)
+    if (gameMode === 'versus' && p.dead && p.respawnTimer <= 0) {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      rrect(ctx, bx, by, barW, barH, 5); ctx.fill();
+      ctx.fillStyle = '#ff3333';
+      ctx.font = 'bold 12px Courier New';
+      ctx.textAlign = 'center';
+      const koOff = Math.sin(performance.now() / 150) * 1.5;
+      ctx.fillText('K.O.', bx + barW / 2 + koOff, by + barH - 2.5);
+    }
   });
 
-  // 闯关模式: 敌人血条 + 顶部信息
+  // ===== 模式信息 =====
   if (gameMode === 'arcade') {
+    // 敌人头顶血条
     enemies.forEach(e => {
       if (e.dead) return;
-      ctx.fillStyle = '#330000';
-      ctx.fillRect(e.x - 30, e.y - 80, 60, 4);
-      ctx.fillStyle = '#ff3333';
-      ctx.fillRect(e.x - 30, e.y - 80, 60 * (e.hp / e.maxHp), 4);
+      const ew = 52, ex = e.x - ew / 2, ey = e.y - 82;
+      const er = Math.max(0, e.hp / e.maxHp);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      rrect(ctx, ex, ey, ew, 6, 3); ctx.fill();
+      if (er > 0) {
+        ctx.fillStyle = er > 0.5 ? '#33ff66' : (er > 0.25 ? '#ffcc00' : '#ff3333');
+        rrect(ctx, ex, ey, Math.max(4, ew * er), 6, 3); ctx.fill();
+      }
+      ctx.strokeStyle = e.hitFlash > 0 ? '#ffffff' : 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = 1;
+      rrect(ctx, ex, ey, ew, 6, 3); ctx.stroke();
     });
-
+    // 波次/得分信息 (血条下方居中, 不再与血条挤压)
+    ctx.textAlign = 'center';
     ctx.fillStyle = '#00ff88';
     ctx.font = 'bold 13px Courier New';
-    ctx.textAlign = 'center';
     const alive = enemies.filter(e => !e.dead).length;
-    ctx.fillText('WAVE ' + wave + '/10   SCORE ' + score + '   敌人 x' + alive, W/2, 20);
+    ctx.fillText('WAVE ' + wave + '/10    敌人 x' + alive, W / 2, 62);
+    ctx.fillStyle = '#00ff88aa';
+    ctx.font = 'bold 11px Courier New';
+    ctx.fillText('SCORE ' + score, W / 2, 78);
   } else {
-    // 对战模式: 回合计时 (最后10秒红色闪烁) + 存活人数
+    // 对战模式: 回合计时 (血条中间, 最后10秒红色闪烁)
     if (roundEndTimer <= 0) {
       const secs = Math.max(0, Math.ceil(roundTimer / 60));
       const urgent = secs <= 10;
       ctx.fillStyle = urgent
         ? (Math.floor(performance.now() / 220) % 2 ? '#ff3333' : '#ff8888')
         : '#ffcc00';
-      ctx.font = 'bold 24px Courier New';
+      ctx.font = 'bold 26px Courier New';
       ctx.textAlign = 'center';
-      ctx.fillText(String(secs).padStart(2, '0'), W/2, 30);
+      ctx.strokeStyle = '#00000099'; ctx.lineWidth = 3;
+      ctx.strokeText(String(secs).padStart(2, '0'), W / 2, 32);
+      ctx.fillText(String(secs).padStart(2, '0'), W / 2, 32);
     }
     const alive = fighters.filter(f => !f.dead).length;
     ctx.fillStyle = '#ff8800';
     ctx.font = 'bold 11px Courier New';
     ctx.textAlign = 'center';
-    ctx.fillText('存活 ' + alive + ' / ' + fighters.length, W/2, 48);
+    ctx.fillText('存活 ' + alive + ' / ' + fighters.length, W / 2, 50);
+  }
+
+  // ===== 自我低血警报: 屏幕边缘红色脉冲 (血量<30%, 混战中感知自身危险) =====
+  const selfF = fighters.find(f => f._isSelf || (f.ctrl && f === fighters[0]));
+  if (selfF && !selfF.dead && selfF.hp / selfF.maxHp < 0.3 && gameState === 'playing') {
+    const a = 0.16 + 0.10 * (Math.sin(performance.now() / 240) * 0.5 + 0.5);
+    const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.72);
+    vg.addColorStop(0, 'rgba(255,0,0,0)');
+    vg.addColorStop(1, 'rgba(255,0,0,' + a.toFixed(2) + ')');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
   }
 }
 
@@ -1630,9 +2094,36 @@ function draw() {
   });
   ctx.globalAlpha = 1;
 
+  // 身份光环 (脚下地面): 自己=绿色脉冲双环, 其他人类玩家=其颜色单环, 电脑不画
+  // 多人联机混战中凭地面光环即可区分真人对手与电脑
+  fighters.forEach(f => {
+    if (f.dead) return;
+    const isPrimary = !!f._isSelf || (!!f.ctrl && f === fighters[0]);
+    const isHuman = isPrimary || !!f.ctrl || !!f.remoteInput;
+    if (!isHuman) return;
+    const t = performance.now() / 1000;
+    if (isPrimary) {
+      const pr = 26 + Math.sin(t * 4) * 3;
+      ctx.strokeStyle = '#00ff88';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath(); ctx.ellipse(f.x, GROUND_Y + 8, pr, pr * 0.32, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.25;
+      ctx.beginPath(); ctx.ellipse(f.x, GROUND_Y + 8, pr + 8, (pr + 8) * 0.32, 0, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath(); ctx.ellipse(f.x, GROUND_Y + 8, 24, 7.5, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+  });
+  ctx.globalAlpha = 1;
+
   // 绘制角色
   fighters.forEach(f => f.draw(ctx));
+  drawPickups();
   drawParticles();
+  drawFloatTexts();
 
   ctx.restore();
 
@@ -1728,6 +2219,14 @@ requestAnimationFrame(loop);
 // 所有按钮点击音 (首次点击同时解锁音频上下文)
 document.querySelectorAll('button').forEach(b =>
   b.addEventListener('click', () => { try { SFX.ui(); } catch (e) {} }));
+
+// 复活次数设置: 1 → 2 → 3 → 5 → ∞ 循环
+document.getElementById('lives-set').addEventListener('click', () => {
+  const opts = [1, 2, 3, 5, Infinity];
+  reviveLives = opts[(opts.indexOf(reviveLives) + 1) % opts.length];
+  document.getElementById('lives-set').textContent =
+    '复活次数: ' + (reviveLives === Infinity ? '无限' : reviveLives);
+});
 
 // 音效开关
 document.getElementById('sfx-toggle').addEventListener('click', () => {
