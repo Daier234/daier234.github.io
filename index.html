@@ -966,6 +966,41 @@ class Stickman {
         ctx.fill();
       }
     }
+
+    // 头顶同步血条 (世界坐标系内绘制, 与角色完全同进退、不随镜头漂移)
+    // 玩家: 名牌下方角色色小条; 敌人: 头顶红绿小条
+    if (!this.dead) {
+      if (this.isPlayer) {
+        const bw = 44, bh = 5, bx = x - bw / 2, by = y - 79;
+        const hr = Math.max(0, this.hp / this.maxHp);
+        ctx.fillStyle = 'rgba(0,0,0,0.65)';
+        rrect(ctx, bx - 1, by - 1, bw + 2, bh + 2, 3); ctx.fill();
+        if (hr > 0) {
+          ctx.fillStyle = this.color;
+          rrect(ctx, bx, by, Math.max(3, bw * hr), bh, 2.5); ctx.fill();
+          if (hr < 0.3) {   // 低血红色警示闪动
+            ctx.fillStyle = 'rgba(255,40,40,' + (0.25 + 0.25 * (Math.sin(performance.now() / 130) * 0.5 + 0.5)).toFixed(2) + ')';
+            rrect(ctx, bx, by, Math.max(3, bw * hr), bh, 2.5); ctx.fill();
+          }
+        }
+        ctx.strokeStyle = this.hitFlash > 0 ? '#ffffff' : 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 1;
+        rrect(ctx, bx, by, bw, bh, 2.5); ctx.stroke();
+      } else {
+        // 敌人头顶小血条 (原画在屏幕坐标系, 镜头移动时会与角色脱节 → 移到此处完美同步)
+        const ew = 52, ex = x - ew / 2, ey = y - 82;
+        const er = Math.max(0, this.hp / this.maxHp);
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        rrect(ctx, ex, ey, ew, 6, 3); ctx.fill();
+        if (er > 0) {
+          ctx.fillStyle = er > 0.5 ? '#33ff66' : (er > 0.25 ? '#ffcc00' : '#ff3333');
+          rrect(ctx, ex, ey, Math.max(4, ew * er), 6, 3); ctx.fill();
+        }
+        ctx.strokeStyle = this.hitFlash > 0 ? '#ffffff' : 'rgba(0,0,0,0.55)';
+        ctx.lineWidth = 1;
+        rrect(ctx, ex, ey, ew, 6, 3); ctx.stroke();
+      }
+    }
   }
 }
 
@@ -1979,21 +2014,7 @@ function drawHud() {
 
   // ===== 模式信息 =====
   if (gameMode === 'arcade') {
-    // 敌人头顶血条
-    enemies.forEach(e => {
-      if (e.dead) return;
-      const ew = 52, ex = e.x - ew / 2, ey = e.y - 82;
-      const er = Math.max(0, e.hp / e.maxHp);
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      rrect(ctx, ex, ey, ew, 6, 3); ctx.fill();
-      if (er > 0) {
-        ctx.fillStyle = er > 0.5 ? '#33ff66' : (er > 0.25 ? '#ffcc00' : '#ff3333');
-        rrect(ctx, ex, ey, Math.max(4, ew * er), 6, 3); ctx.fill();
-      }
-      ctx.strokeStyle = e.hitFlash > 0 ? '#ffffff' : 'rgba(0,0,0,0.55)';
-      ctx.lineWidth = 1;
-      rrect(ctx, ex, ey, ew, 6, 3); ctx.stroke();
-    });
+    // (敌人头顶血条已移入角色绘制流程, 世界坐标系, 与角色同步移动)
     // 波次/得分信息 (血条下方居中, 不再与血条挤压)
     ctx.textAlign = 'center';
     ctx.fillStyle = '#00ff88';
