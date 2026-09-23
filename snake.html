@@ -1,0 +1,2129 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="trae-edit-mode-dragging"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05050c">
+<title>贪吃蛇恭夫 - 街机游戏</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05050c; font-family: 'Courier New', monospace; }
+  #wrap { position: fixed; inset: 0; }
+  #cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  /* CRT 扫描线 */
+  #scanlines { position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.16) 0 1px, transparent 1px 3px); }
+
+  /* ===== 界面层 ===== */
+  .screen { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    align-items: center; gap: 14px; background: rgba(5,5,12,0.82);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    padding: 18px; text-align: center; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-top: max(18px, env(safe-area-inset-top));
+    padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  /* 内容超出屏幕时首尾自动贴边、滚动可达; 未超出时保持垂直居中
+     (修复 flex justify-content:center 溢出时顶部标题被裁、滚不到底的缺陷) */
+  .screen > *:first-child { margin-top: auto; }
+  .screen > *:last-child { margin-bottom: auto; }
+  .hidden { display: none !important; }
+
+  .game-title { font-size: clamp(30px, 7vw, 54px); font-weight: bold; color: #00ff88;
+    letter-spacing: 8px; text-shadow: 0 0 22px #00ff88, 3px 3px 0 #004422; }
+  .game-sub { font-size: 13px; color: #00ffffaa; letter-spacing: 4px; margin-top: -8px; }
+
+  .btn { font-family: inherit; cursor: pointer; border: 2px solid #00ff88; color: #00ff88;
+    background: #00ff8811; padding: 12px 30px; font-size: 16px; font-weight: bold;
+    letter-spacing: 2px; transition: all .15s; text-decoration: none; display: inline-block; }
+  .btn:hover { background: #00ff88; color: #000; box-shadow: 0 0 15px #00ff88; }
+  .btn.orange { border-color: #ff8800; color: #ff8800; background: #ff880011; }
+  .btn.orange:hover { background: #ff8800; color: #000; box-shadow: 0 0 15px #ff8800; }
+  .btn.pink { border-color: #ff5577; color: #ff5577; background: #ff557711; }
+  .btn.pink:hover { background: #ff5577; color: #000; box-shadow: 0 0 15px #ff5577; }
+  .btn.small { padding: 8px 18px; font-size: 13px; }
+
+  /* 模式卡片 */
+  .mode-grid { display: grid; grid-template-columns: 1fr; gap: 14px; width: min(420px, 92vw); }
+  .mode-card { border: 2px solid #00ffff44; background: #0a0a1a;
+    padding: 14px 18px; cursor: pointer; transition: all .15s; text-align: left; }
+  .mode-card:hover { border-color: #00ffff; box-shadow: 0 0 18px #00ffff44; transform: translateY(-2px); }
+  .mode-name { font-size: 18px; font-weight: bold; color: #00ffff; letter-spacing: 2px; }
+  .mode-desc { font-size: 12px; color: #8899aa; margin-top: 4px; line-height: 1.5; }
+  .mode-best { font-size: 12px; color: #ffd700; margin-top: 6px; }
+
+  .help-box { font-size: 12px; color: #7788aa; line-height: 1.9; max-width: 480px; }
+  .help-box b { color: #00ff88; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center; font-size: 12px; color: #8899aa; }
+  .legend span { white-space: nowrap; }
+
+  .site-link { color: #ffd700; font-size: 14px; text-decoration: underline; letter-spacing: 1px; }
+  .site-link:visited { color: #ffd700; }
+
+  /* 矮屏 (手机横屏 / 小窗口): 卡片两列排布 + 压缩间距, 让标题到底部链接一屏完整可见 */
+  @media (max-height: 780px) {
+    .screen { gap: 10px; }
+    .mode-grid { grid-template-columns: 1fr 1fr; width: min(620px, 94vw); gap: 10px; }
+    .mode-card { padding: 11px 14px; }
+    .mode-desc { line-height: 1.45; }
+    .help-box { line-height: 1.7; }
+  }
+  @media (max-height: 640px) {
+    .screen { gap: 8px; padding-left: 12px; padding-right: 12px; }
+    .game-title { font-size: clamp(24px, 5vw, 38px); letter-spacing: 5px; }
+    .game-sub { margin-top: -5px; font-size: 11px; }
+    .mode-card { padding: 8px 12px; }
+    .mode-name { font-size: 15px; }
+    .mode-desc { font-size: 11px; margin-top: 2px; }
+    .mode-best { font-size: 11px; margin-top: 3px; }
+    .legend { gap: 3px 10px; font-size: 10px; }
+    .help-box { font-size: 11px; line-height: 1.55; }
+    .btn { padding: 10px 22px; font-size: 14px; }
+    .btn.small { padding: 6px 13px; font-size: 12px; }
+    .site-link { font-size: 12px; }
+    .grade { font-size: 44px; }
+    .stats-grid { font-size: 12px; grid-template-columns: repeat(2, minmax(100px, 140px)); }
+  }
+
+  /* ===== 联机 ===== */
+  #online-screen { gap: 10px; }
+  .net-title { font-size: 26px; font-weight: bold; color: #00ffff; letter-spacing: 5px;
+    text-shadow: 0 0 18px #00ffff88; }
+  .net-panel { width: min(400px, 92vw); border: 1.5px solid #00ffff33; background: #0a0a1a;
+    padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .net-panel h3 { font-size: 14px; color: #00ffff; letter-spacing: 2px; }
+  .net-row { display: flex; gap: 8px; align-items: center; }
+  .net-input { flex: 1; font-family: inherit; background: #050510; color: #00ff88;
+    border: 1.5px solid #00ff8855; padding: 9px 12px; font-size: 15px; letter-spacing: 3px;
+    text-transform: uppercase; min-width: 0; }
+  .net-input:focus { outline: none; border-color: #00ff88; }
+  .net-code { font-size: 30px; font-weight: bold; color: #ffd700; letter-spacing: 10px;
+    text-shadow: 0 0 18px #ffd70088; padding: 6px 0; }
+  #net-error { color: #ff5577; font-size: 13px; min-height: 18px; }
+  #net-lobby-list { display: flex; flex-direction: column; gap: 5px; }
+  .lobby-row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #ffffff;
+    background: #101024; border: 1px solid #22224a; padding: 6px 12px; }
+  .lobby-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .lobby-tag { font-size: 11px; color: #ffd700; margin-left: auto; }
+  #net-status { font-size: 12px; color: #8899aa; }
+
+  .over-title { font-size: clamp(34px, 8vw, 58px); font-weight: bold; letter-spacing: 10px; color: #ff3333;
+    text-shadow: 0 0 25px #ff333388, 3px 3px 0 #440000; }
+  .over-title.win { color: #ffd700; text-shadow: 0 0 25px #ffd70088, 3px 3px 0 #443300; }
+  .record-flash { color: #00ff88; font-size: 20px; font-weight: bold; letter-spacing: 4px;
+    animation: recFlash .5s steps(2) infinite; }
+  @keyframes recFlash { 50% { opacity: 0.25; } }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(2, minmax(110px, 150px)); gap: 8px 20px;
+    font-size: 14px; color: #aabbcc; }
+  .stats-grid b { color: #ffffff; font-size: 17px; }
+  .grade { font-size: 58px; font-weight: bold; color: #ffd700; text-shadow: 0 0 30px #ffd700; margin: -6px 0; }
+
+  /* ===== 手机触控 ===== */
+  #dpad { position: absolute; right: 14px; bottom: 14px; z-index: 8;
+    display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 4px; opacity: 0.55; }
+  #dpad button { font-family: inherit; font-size: 24px; color: #00ff88; background: #001a0e88;
+    border: 1.5px solid #00ff8866; border-radius: 10px; touch-action: none; }
+  #dpad button:active { background: #00ff88; color: #000; }
+  #dpad .empty { visibility: hidden; }
+  #pause-btn { position: absolute; top: 10px; right: 12px; z-index: 8; width: 42px; height: 42px;
+    font-size: 18px; color: #00ffff; background: #001a2288; border: 1.5px solid #00ffff66; border-radius: 10px; }
+  #exit-btn { position: absolute; top: 10px; right: 12px; z-index: 8; min-width: 42px; height: 42px;
+    padding: 0 10px; font-family: inherit; font-size: 15px; color: #ff5577; background: #220a0e88;
+    border: 1.5px solid #ff557766; border-radius: 10px; }
+  #exit-btn.armed { color: #fff; background: #ff3333; border-color: #ff3333;
+    animation: exitFlash .3s steps(2) infinite; }
+  @keyframes exitFlash { 50% { opacity: 0.4; } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv" width="1402" height="1436"></canvas>
+  <div id="scanlines"></div>
+
+  <!-- 手机方向键 -->
+  <div id="dpad" class="hidden">
+    <div class="empty"></div><button data-dir="0,-1">▲</button><div class="empty"></div>
+    <button data-dir="-1,0">◀</button><div class="empty"></div><button data-dir="1,0">▶</button>
+    <div class="empty"></div><button data-dir="0,1">▼</button><div class="empty"></div>
+  </div>
+  <button id="pause-btn" class="hidden" style="display:none">II</button>
+  <button id="exit-btn" class="hidden" style="display:none">✕</button>
+
+  <!-- ===== 主菜单 ===== -->
+  <div id="menu-screen" class="screen">
+    <div class="game-title">贪吃蛇恭夫</div>
+    <div class="game-sub">SNAKE GONGFU ARCADE</div>
+
+    <div class="mode-grid">
+    <div class="mode-card" id="m-classic">
+      <div class="mode-name">① 经典模式</div>
+      <div class="mode-desc">四周边界互通, 撞墙不死, 穿墙伴随空间波纹特效。节奏平稳, 适合休闲刷分。</div>
+      <div class="mode-best" id="best-classic">最高分: 0</div>
+    </div>
+    <div class="mode-card" id="m-maze">
+      <div class="mode-name">② 迷宫模式</div>
+      <div class="mode-desc">撞墙即亡! 每 4 苹果刷出迷宫障碍 (虚影提前 1.4 秒预警), 越玩越险, 极限走位。</div>
+      <div class="mode-best" id="best-maze">最高分: 0</div>
+    </div>
+    <div class="mode-card" id="m-turbo">
+      <div class="mode-name">③ 极速模式</div>
+      <div class="mode-desc">橙色闪电蛇! 起步飞快, 每 3 苹果提速一档 (SPEED UP 播报 + 残影拖尾), 高手专属。</div>
+      <div class="mode-best" id="best-turbo">最高分: 0</div>
+    </div>
+    <div class="mode-card" id="m-online">
+      <div class="mode-name">④ 联机对抗 <span style="color:#ff5577; font-size:12px">HOT</span></div>
+      <div class="mode-desc">创建房间分享 4 位房码, 2~4 人限时 120 秒 PK! 连杀播报 (DOUBLE KILL), 结算完整战报排行榜。</div>
+      <div class="mode-best" style="color:#00ffff">→ 点击进入联机大厅</div>
+    </div>
+    </div>
+
+    <div class="legend">
+      <span>🍎 苹果 +10</span><span>💰 金币 +50</span><span>⭐ 星星 无限穿行</span>
+      <span>⏱ 时钟 减速</span><span>✂ 剪刀 缩短蛇身</span>
+    </div>
+    <div class="help-box">
+      <b>电脑</b>: 方向键 / WASD 移动 · P 或 Esc 暂停 · 数字键 1/2/3/4 快速选模式<br>
+      <b>手机</b>: 滑动屏幕或右下方向键 · 右上角暂停按钮<br>
+      连续快速进食可叠加 <b>连击倍率</b> (最高 x8)! 分数超越纪录瞬间有金光提示<br>
+      所有模式开局 <b>3·2·1</b> 倒计时准备 · <b>联机</b>: 房码建房, 2~4 人限时 PK, 连杀有播报
+    </div>
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center">
+      <button class="btn small" id="mute-btn">音效: 开</button>
+      <button class="btn small" id="hall-btn" style="border-color:#ffd700;color:#ffd700;background:#ffd70022">🏠 恭夫游戏大厅</button>
+      <a class="btn small" href="./index.html">火柴人恭夫</a>
+    </div>
+    <a class="site-link" href="https://gqp.nat100.top">恭夫乡村平台 gqp.nat100.top</a>
+  </div>
+
+  <!-- ===== 联机大厅 ===== -->
+  <div id="online-screen" class="screen hidden">
+    <div class="net-title">联 机 对 抗</div>
+    <div class="net-panel">
+      <h3>你的名字</h3>
+      <input class="net-input" id="net-name" maxlength="8" placeholder="输入昵称">
+    </div>
+
+    <div class="net-panel" id="net-entry">
+      <h3>创建房间 (你是房主)</h3>
+      <button class="btn" id="net-create-btn">创 建 房 间</button>
+      <h3 style="margin-top:6px">加入房间 (输入房码)</h3>
+      <div class="net-row">
+        <input class="net-input" id="net-join-code" maxlength="4" placeholder="ABCD" inputmode="text">
+        <button class="btn orange" id="net-join-btn">加 入</button>
+      </div>
+      <div id="net-error"></div>
+    </div>
+
+    <div class="net-panel hidden" id="net-room">
+      <h3>房间码 (发给好友)</h3>
+      <div class="net-code" id="net-code-show">----</div>
+      <div id="net-lobby-list"></div>
+      <div id="net-status"></div>
+      <button class="btn hidden" id="net-start-btn">开 始 对 战</button>
+      <div id="net-wait-hint" class="hidden" style="font-size:12px; color:#ffd700">等待房主开始对战...</div>
+      <button class="btn pink small" id="net-leave-btn">离开房间</button>
+    </div>
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center">
+      <button class="btn small" id="net-back-btn">返回菜单</button>
+      <button class="btn small" id="net-hall-btn" style="border-color:#ffd700;color:#ffd700;background:#ffd70022">🏠 恭夫游戏大厅</button>
+    </div>
+    <a class="site-link" href="https://gqp.nat100.top">恭夫乡村平台 gqp.nat100.top</a>
+  </div>
+
+  <!-- ===== 暂停 ===== -->
+  <div id="pause-screen" class="screen hidden">
+    <div class="game-title" style="font-size:34px; color:#00ffff; text-shadow:0 0 18px #00ffff">PAUSED</div>
+    <div id="pause-stats" style="color:#8899aa; font-size:14px; line-height:1.8"></div>
+    <button class="btn" id="resume-btn">继 续</button>
+    <div style="display:flex; gap:12px">
+      <button class="btn orange small" id="p-restart-btn">重 来</button>
+      <button class="btn pink small" id="p-menu-btn">返回菜单</button>
+      <button class="btn small" id="p-mute-btn">音效: 开</button>
+    </div>
+    <a class="site-link" href="https://gqp.nat100.top">恭夫乡村平台 gqp.nat100.top</a>
+  </div>
+
+  <!-- ===== 结算 ===== -->
+  <div id="over-screen" class="screen hidden">
+    <div class="over-title">GAME OVER</div>
+    <div class="record-flash hidden" id="record-flash">★ 新 纪 录 ★</div>
+    <div id="net-winner" class="hidden" style="font-size:17px; color:#00ffff; letter-spacing:2px"></div>
+    <div class="grade" id="grade">A</div>
+    <div class="stats-grid" id="over-stats"></div>
+    <div id="net-restart-hint" class="hidden" style="font-size:12px; color:#ffd700">等待房主开始下一局...</div>
+    <button class="btn" id="restart-btn">再 来 一 局</button>
+    <button class="btn pink small" id="menu-btn">返回菜单</button>
+    <a class="site-link" href="https://gqp.nat100.top">恭夫乡村平台 gqp.nat100.top</a>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ============================================================
+// 贪吃蛇恭夫 - 专业街机版
+// 霓虹视觉 / WebAudio 合成音效 / 连击系统 / 道具系统 / 手机全屏
+// 逻辑按格步进 + 渲染插值 = 丝滑移动 (60fps 视觉, 格子判定)
+// ============================================================
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+
+let W = 0, H = 0, DPR = 1;
+let cell = 20, boardX = 0, boardY = 0;    // 渲染换算 (棋盘居中)
+const GRID = { cols: 28, rows: 18 };      // 开局按横竖屏选择
+let padTop = 62, padBottom = 12;          // 棋盘安全留白 (顶部HUD/计分板 + 底部信息)
+
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  // 触屏给右下方向键让位: 竖屏留底部, 横屏留右侧 (棋盘左移, 方向键落在空白区)
+  const touch = isTouchDevice() && !$('dpad').classList.contains('hidden');
+  const portrait = H > W;
+  const padL = 7;
+  const padR = (touch && !portrait) ? 204 : 7;
+  const padB = padBottom + (touch && portrait ? 188 : 0);
+  const availW = W - padL - padR, availH = H - padTop - padB;
+  cell = Math.max(10, Math.floor(Math.min(availW / GRID.cols, availH / GRID.rows)));
+  boardX = padL + (availW - GRID.cols * cell) / 2;
+  boardY = padTop + (availH - GRID.rows * cell) / 2;
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+
+// ============ 音效引擎 (WebAudio 合成, 零外部文件) ============
+let audioCtx = null;
+let soundOn = true;
+try { soundOn = localStorage.getItem('snakeGongfuSound') !== '0'; } catch (e) {}
+
+function ensureAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, dur, type, vol, slideTo) {
+  if (!audioCtx || !soundOn) return;
+  const t0 = audioCtx.currentTime;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type || 'square';
+  o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(30, slideTo), t0 + dur);
+  g.gain.setValueAtTime(vol || 0.12, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noise(dur, vol, filterFreq) {
+  if (!audioCtx || !soundOn) return;
+  const t0 = audioCtx.currentTime;
+  const len = Math.floor(audioCtx.sampleRate * dur);
+  const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = audioCtx.createBufferSource(); src.buffer = buf;
+  const f = audioCtx.createBiquadFilter(); f.type = 'lowpass';
+  f.frequency.value = filterFreq || 1200;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(vol || 0.14, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+  src.start(t0);
+}
+const SFX = {
+  eat(n)   { tone(420 + Math.min(n, 8) * 55, 0.09, 'square', 0.12); },
+  gold()   { [660, 880, 1174].forEach((f, i) => setTimeout(() => tone(f, 0.09, 'triangle', 0.13), i * 65)); },
+  star()   { tone(1200, 0.1, 'sine', 0.12, 1800); setTimeout(() => tone(1600, 0.1, 'sine', 0.1, 2200), 80); },
+  clock()  { tone(300, 0.08, 'square', 0.11, 240); setTimeout(() => tone(240, 0.1, 'square', 0.11, 190), 110); },
+  scissors(){ noise(0.1, 0.16, 3400); tone(900, 0.07, 'sawtooth', 0.08, 500); },
+  die()    { tone(220, 0.25, 'sawtooth', 0.16, 60); setTimeout(() => tone(140, 0.35, 'sawtooth', 0.16, 40), 160); noise(0.3, 0.18, 800); },
+  record() { [523, 659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => tone(f, 0.12, 'triangle', 0.14), i * 95)); },
+  click()  { tone(700, 0.05, 'square', 0.09, 900); },
+  pause()  { tone(500, 0.07, 'square', 0.1, 380); },
+  kill()   { tone(300, 0.08, 'square', 0.13, 500); setTimeout(() => tone(600, 0.1, 'square', 0.13, 900), 80); },
+  go()     { tone(523, 0.1, 'square', 0.13); setTimeout(() => tone(784, 0.16, 'square', 0.13), 110); },
+  spawnS() { tone(330, 0.08, 'triangle', 0.1, 550); },
+  count()  { tone(600, 0.09, 'square', 0.12); },
+  speedup(){ tone(520, 0.08, 'square', 0.12, 780); setTimeout(() => tone(780, 0.1, 'square', 0.12, 1040), 90); },
+  streak(n){ const base = [660, 880, 1100, 1320][Math.min(n - 1, 3)];
+             tone(base, 0.09, 'square', 0.14); setTimeout(() => tone(base * 1.25, 0.12, 'square', 0.13), 100); },
+};
+function haptic(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+// ============ 游戏状态 ============
+let gameState = 'menu';     // menu | playing | paused | dying | over
+let mode = 'classic';       // classic | maze | turbo
+let snake = [], prevSnake = [];
+let dir = { x: 1, y: 0 }, dirQueue = [];
+let foods = [];             // {x,y,type,t}
+let obstacles = [];         // {x,y}
+let stepInterval = 150, stepAcc = 0;
+let score = 0, combo = 1, comboTimer = 0, maxCombo = 1, apples = 0, growPending = 0;
+let slowTimer = 0, starTimer = 0;
+let elapsed = 0;
+let particles = [], floats = [];
+let shake = 0, flashA = 0, deathT = 0;
+let newRecord = false;
+
+// 专业打磨新增状态
+let countdownT = 0;                 // 单机开局 3-2-1 倒计时
+let pausedFrom = 'playing';         // 暂停前的状态 (可能从倒计时暂停)
+let recordPassed = false;           // 本局是否已超越历史纪录
+let ripples = [];                   // 穿墙波纹 {x,y,t}
+let pendingObs = [];                // 迷宫障碍预警虚影 {cells,t}
+let histA = null, histB = null;     // 极速模式残影 (上两步身体)
+let killStreak = {};                // 联机连杀记录 idx -> {t,n}
+
+const MODE_CONF = {
+  classic: { base: 150, floor: 70,  dec: 1.2, wrap: true,  obstacles: false, label: '经典' },
+  maze:    { base: 160, floor: 75,  dec: 1.2, wrap: false, obstacles: true,  label: '迷宫' },
+  turbo:   { base: 110, floor: 55,  dec: 1.5, wrap: false, obstacles: false, label: '极速' },
+  online:  { base: 130, floor: 130, dec: 0,   wrap: true,  obstacles: false, label: '联机' },
+};
+
+// ============ 联机对抗常量 (PeerJS: 房主权威模拟 + 客户端插值渲染) ============
+const NET_PREFIX = 'snakegf-';
+const NET_ICE = { iceServers: [
+  { urls: 'stun:stun.qq.com:3478' },
+  { urls: 'stun:stun.miwifi.com:3478' },
+  { urls: 'stun:stun.l.google.com:19302' }
+]};
+const NET_COLORS = ['#00ff88', '#ff4444', '#ffee00', '#ff88ff'];
+const NET_ITV = 130;          // 联机固定步长 (ms)
+const NET_ROUND = 120000;     // 一局 120 秒
+const NET_CD = 3000;          // 开局倒计时
+const NET_RESPAWN = 2000;     // 死亡重生等待
+
+// 最高分 (本地存储)
+const BEST_KEY = 'snakeGongfuBestV1';
+let best = { classic: 0, maze: 0, turbo: 0 };
+try { best = Object.assign(best, JSON.parse(localStorage.getItem(BEST_KEY) || '{}')); } catch (e) {}
+function saveBest() { try { localStorage.setItem(BEST_KEY, JSON.stringify(best)); } catch (e) {} }
+
+// ============ 工具 ============
+function rrect(g, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+function px(x) { return boardX + (x + 0.5) * cell; }
+function py(y) { return boardY + (y + 0.5) * cell; }
+function isTouchDevice() { return 'ontouchstart' in window || navigator.maxTouchPoints > 0; }
+
+function tryAutoFullscreen() {
+  if (!isTouchDevice()) return;
+  const el = document.documentElement;
+  try {
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) fn.call(el);
+  } catch (e) {}
+}
+
+// ============ 开局 ============
+function pickGrid() {
+  const landscape = window.innerWidth >= window.innerHeight;
+  // 触屏竖屏底部要放方向键, 行数少些保证格子够大
+  GRID.cols = landscape ? 28 : 17;
+  GRID.rows = landscape ? 18 : (isTouchDevice() ? 22 : 26);
+}
+function startGame(m) {
+  mode = m;
+  pickGrid();
+  // 顶部留白: HUD(62) + 效果图标行(26) ; 暂停按钮全设备可见 (不止触屏)
+  padTop = 88; padBottom = 12;
+  if (isTouchDevice()) $('dpad').classList.remove('hidden');
+  $('pause-btn').style.display = ''; $('pause-btn').classList.remove('hidden');
+  resetExitBtn(); $('exit-btn').style.display = 'none';
+  resize();
+  const conf = MODE_CONF[mode];
+  snake = []; prevSnake = [];
+  const cy = Math.floor(GRID.rows / 2), cx = Math.floor(GRID.cols / 2) - 2;
+  for (let i = 0; i < 4; i++) snake.push({ x: cx - i, y: cy });
+  prevSnake = snake.map(s => ({ x: s.x, y: s.y }));
+  dir = { x: 1, y: 0 }; dirQueue = [];
+  foods = []; obstacles = [];
+  stepInterval = conf.base; stepAcc = 0;
+  score = 0; combo = 1; comboTimer = 0; maxCombo = 1; apples = 0; growPending = 0;
+  slowTimer = 0; starTimer = 0; elapsed = 0;
+  particles = []; floats = [];
+  shake = 0; flashA = 0; deathT = 0; newRecord = false;
+  if (conf.obstacles) for (let i = 0; i < 4; i++) addObstacle();
+  spawnFood('apple');
+  ripples = []; pendingObs = []; histA = histB = null; recordPassed = false;
+  // 开局 3-2-1 倒计时 (专业街机仪式感, 防措手不及)
+  countdownT = 2100;
+  gameState = 'countdown';
+  SFX.count();
+  hideAllScreens();
+  tryAutoFullscreen();
+}
+function hideAllScreens() {
+  ['menu-screen', 'pause-screen', 'over-screen', 'online-screen'].forEach(id => $(id).classList.add('hidden'));
+}
+function backToMenu() {
+  if (net.inRoom || net.started) netCleanup();
+  mode = 'classic';
+  gameState = 'menu';
+  padTop = 62; padBottom = 12;
+  hideAllScreens();
+  $('menu-screen').classList.remove('hidden');
+  $('dpad').classList.add('hidden');
+  $('pause-btn').style.display = 'none';
+  resetExitBtn(); $('exit-btn').style.display = 'none';
+  resize();
+  refreshBestLabels();
+}
+function refreshBestLabels() {
+  $('best-classic').textContent = '最高分: ' + best.classic;
+  $('best-maze').textContent = '最高分: ' + best.maze;
+  $('best-turbo').textContent = '最高分: ' + best.turbo;
+}
+
+// ============ 食物 / 障碍 ============
+function randFreeCell(minHeadDist) {
+  for (let tries = 0; tries < 400; tries++) {
+    const x = (Math.random() * GRID.cols) | 0, y = (Math.random() * GRID.rows) | 0;
+    if (snake.some(s => s.x === x && s.y === y)) continue;
+    if (foods.some(f => f.x === x && f.y === y)) continue;
+    if (obstacles.some(o => o.x === x && o.y === y)) continue;
+    if (minHeadDist && snake.length &&
+        Math.max(Math.abs(x - snake[0].x), Math.abs(y - snake[0].y)) < minHeadDist) continue;
+    return { x, y };
+  }
+  return null;
+}
+function spawnFood(type) {
+  const c = randFreeCell(type === 'apple' ? 2 : 4);
+  if (!c) return;
+  foods.push({ x: c.x, y: c.y, type: type, t: type === 'apple' ? Infinity : 7000, born: performance.now() });
+}
+function spawnSpecial() {
+  if (foods.some(f => f.type !== 'apple')) return;
+  const r = Math.random();
+  const type = r < 0.4 ? 'gold' : (r < 0.6 ? 'star' : (r < 0.8 ? 'clock' : 'scissors'));
+  spawnFood(type);
+}
+function addObstacle() {
+  const cells = makeObstacle();
+  if (cells) cells.forEach(c => obstacles.push(c));
+  return !!cells;
+}
+// 生成一段障碍格子 (不入列, 供迷宫预警机制使用)
+function makeObstacle() {
+  for (let tries = 0; tries < 60; tries++) {
+    const horiz = Math.random() < 0.5;
+    const len = 2 + ((Math.random() * 2) | 0);
+    const x0 = 1 + ((Math.random() * (GRID.cols - 1 - (horiz ? len : 0))) | 0);
+    const y0 = 1 + ((Math.random() * (GRID.rows - 1 - (horiz ? 0 : len))) | 0);
+    const cells = []; let ok = true;
+    for (let k = 0; k < len; k++) {
+      const x = horiz ? x0 + k : x0, y = horiz ? y0 : y0 + k;
+      if (snake.some(s => Math.abs(s.x - x) <= 3 && Math.abs(s.y - y) <= 3)) { ok = false; break; }
+      if (foods.some(f => f.x === x && f.y === y)) { ok = false; break; }
+      if (obstacles.some(o => o.x === x && o.y === y)) { ok = false; break; }
+      if (pendingObs.some(po => po.cells.some(c => c.x === x && c.y === y))) { ok = false; break; }
+      cells.push({ x, y });
+    }
+    if (ok) return cells;
+  }
+  return null;
+}
+
+// ============ 逻辑步进 (一格) ============
+function currentInterval() {
+  let itv = stepInterval;
+  if (slowTimer > 0) itv *= 1.5;   // 时钟: 减速
+  if (starTimer > 0) itv *= 0.8;   // 星星: 冲刺
+  return itv;
+}
+function step() {
+  if (dirQueue.length) dir = dirQueue.shift();
+  const conf = MODE_CONF[mode];
+  const star = starTimer > 0;
+  let nx = snake[0].x + dir.x, ny = snake[0].y + dir.y;
+  const outside = nx < 0 || ny < 0 || nx >= GRID.cols || ny >= GRID.rows;
+
+  if (outside) {
+    if (conf.wrap || star) {            // 穿墙: 从对面钻出
+      ripples.push({ x: snake[0].x, y: snake[0].y, t: 0 });   // 入口波纹
+      ripples.push({ x: (nx + GRID.cols) % GRID.cols, y: (ny + GRID.rows) % GRID.rows, t: 0 });  // 出口波纹
+      nx = (nx + GRID.cols) % GRID.cols;
+      ny = (ny + GRID.rows) % GRID.rows;
+    } else { die(); return; }           // 撞墙即亡
+  }
+  if (!star && obstacles.some(o => o.x === nx && o.y === ny)) { die(); return; }
+
+  // 自撞检测 (本步不生长时尾巴会让位, 允许进尾格)
+  if (!star) {
+    const body = growPending > 0 ? snake : snake.slice(0, snake.length - 1);
+    if (body.some(s => s.x === nx && s.y === ny)) { die(); return; }
+  }
+
+  // 快照 (供渲染插值); 极速模式额外记录上两步身体作残影
+  if (mode === 'turbo') { histB = histA; histA = snake.map(s => ({ x: s.x, y: s.y })); }
+  prevSnake = snake.map(s => ({ x: s.x, y: s.y }));
+  snake.unshift({ x: nx, y: ny });
+  if (growPending > 0) growPending--;
+  else snake.pop();
+
+  // 星星冲刺尾迹
+  if (star) spawnParticles(px(nx), py(ny), '#ffff88', 2, 1.5);
+
+  // 进食
+  const fi = foods.findIndex(f => f.x === nx && f.y === ny);
+  if (fi >= 0) applyFood(foods.splice(fi, 1)[0]);
+}
+function applyFood(f) {
+  // 连击: 3.5 秒内连续进食叠加倍率
+  if (comboTimer > 0) combo = Math.min(8, combo + 1);
+  else combo = 1;
+  comboTimer = 3500;
+  maxCombo = Math.max(maxCombo, combo);
+
+  let pts = 0, grow = 0;
+  if (f.type === 'apple')     { pts = 10; grow = 1; }
+  else if (f.type === 'gold') { pts = 50; grow = 2; }
+  else if (f.type === 'star') { pts = 15; starTimer = 5000; }
+  else if (f.type === 'clock'){ pts = 10; slowTimer = 6000; }
+  else if (f.type === 'scissors') {
+    pts = 20;
+    const cut = Math.min(3, snake.length - 4);
+    for (let i = 0; i < cut; i++) {
+      const tail = snake.pop();
+      spawnParticles(px(tail.x), py(tail.y), '#00ffaa', 6, 2.5);
+    }
+    if (prevSnake.length > snake.length) prevSnake.length = snake.length;
+  }
+  score += pts * combo;
+  growPending += grow;
+
+  // 超越历史纪录瞬间: 金光提示 (只提示一次)
+  if (!recordPassed && best[mode] > 0 && score > best[mode]) {
+    recordPassed = true;
+    addFloat(W / 2, boardY + 26, '★ 超越纪录 ★', '#ffd700');
+    flashA = Math.max(flashA, 0.2);
+    SFX.gold();
+  }
+
+  const fx = px(f.x), fy = py(f.y);
+  const col = f.type === 'apple' ? '#ff4444' : f.type === 'gold' ? '#ffd700' :
+              f.type === 'star' ? '#ffee00' : f.type === 'clock' ? '#00ccff' : '#00ffaa';
+  spawnParticles(fx, fy, col, f.type === 'gold' ? 16 : 8, 3);
+  addFloat(fx, fy - cell * 0.6, '+' + (pts * combo), col);
+  if (combo > 1) addFloat(px(snake[0].x), py(snake[0].y) - cell * 1.4, 'x' + combo + ' COMBO', '#ffff00');
+
+  if (f.type === 'apple') {
+    apples++;
+    SFX.eat(combo); haptic(15);
+    stepInterval = Math.max(MODE_CONF[mode].floor, MODE_CONF[mode].base - apples * MODE_CONF[mode].dec);
+    spawnFood('apple');
+    // 迷宫: 新障碍先以虚影预警 1.4 秒再实体化 (公平可预判)
+    if (MODE_CONF[mode].obstacles && apples % 4 === 0 && obstacles.length < 30) {
+      const cells = makeObstacle();
+      if (cells) {
+        pendingObs.push({ cells: cells, t: 1400 });
+        addFloat(W / 2, boardY + 30, '迷宫预警!', '#ff44ff');
+        tone(880, 0.09, 'square', 0.1, 660);
+      }
+    }
+    // 极速: 每 3 苹果提升一个速度档位
+    if (mode === 'turbo' && apples % 3 === 0) {
+      addFloat(W / 2, boardY + 46, 'SPEED UP! LV ' + (1 + apples / 3), '#ff8800');
+      SFX.speedup();
+      shake = Math.max(shake, 4);
+    }
+    if (apples % 5 === 0) spawnSpecial();
+  } else if (f.type === 'gold')   { SFX.gold(); shake = Math.max(shake, 5); haptic(30); }
+  else if (f.type === 'star')     { SFX.star(); shake = Math.max(shake, 6); flashA = Math.max(flashA, 0.25); haptic([20, 40, 20]); }
+  else if (f.type === 'clock')    { SFX.clock(); haptic(20); }
+  else if (f.type === 'scissors') { SFX.scissors(); haptic(20); }
+}
+function die() {
+  gameState = 'dying';
+  deathT = 0;
+  shake = 14; flashA = 0.5;
+  SFX.die(); haptic([60, 40, 80]);
+  const h = snake[0];
+  spawnParticles(px(h.x), py(h.y), '#00ff88', 30, 4.5);
+  spawnParticles(px(h.x), py(h.y), '#ff3333', 14, 3.5);
+}
+function finishOver() {
+  gameState = 'over';
+  // 本地结算复位 (联机结算用 netShowOver, 字段互不干扰)
+  $('over-title').textContent = 'GAME OVER';
+  $('over-title').classList.remove('win');
+  $('grade').style.display = '';
+  $('net-winner').classList.add('hidden');
+  $('net-restart-hint').classList.add('hidden');
+  $('restart-btn').classList.remove('hidden');
+  newRecord = score > best[mode] && score > 0;
+  if (newRecord) { best[mode] = score; saveBest(); SFX.record(); }
+  $('record-flash').classList.toggle('hidden', !newRecord);
+  // 评级
+  const g = score >= 1200 ? 'S' : score >= 700 ? 'A' : score >= 350 ? 'B' : score >= 120 ? 'C' : 'D';
+  $('grade').textContent = g;
+  $('grade').style.color = g === 'S' ? '#ff55ff' : g === 'A' ? '#ffd700' : g === 'B' ? '#00ffff' : g === 'C' ? '#00ff88' : '#888888';
+  $('grade').style.textShadow = '0 0 30px currentColor';
+  // 复位联机结算可能改过的网格样式
+  $('over-stats').style.gridTemplateColumns = '';
+  $('over-stats').style.fontSize = '';
+  const m = Math.floor(elapsed / 60000), s = Math.floor(elapsed / 1000) % 60;
+  $('over-stats').innerHTML =
+    '<div>得分</div><div><b>' + score + '</b></div>' +
+    '<div>最高分</div><div><b>' + best[mode] + '</b></div>' +
+    '<div>蛇身长度</div><div><b>' + snake.length + '</b></div>' +
+    '<div>最高连击</div><div><b>x' + maxCombo + '</b></div>' +
+    '<div>吃掉苹果</div><div><b>' + apples + '</b></div>' +
+    '<div>用时</div><div><b>' + m + ':' + String(s).padStart(2, '0') + '</b></div>';
+  $('over-screen').classList.remove('hidden');
+  $('dpad').classList.add('hidden');
+  $('pause-btn').style.display = 'none';
+  resetExitBtn(); $('exit-btn').style.display = 'none';
+}
+
+// ============ 暂停 ============
+function pauseGame() {
+  if (gameState !== 'playing' && gameState !== 'countdown') return;
+  if (mode === 'online') return;   // 联机对战不可暂停
+  pausedFrom = gameState;
+  gameState = 'paused';
+  $('pause-stats').innerHTML = '得分 ' + score + ' · 长度 ' + snake.length + ' · 最高连击 x' + maxCombo +
+    ' · ' + MODE_CONF[mode].label + '模式';
+  $('pause-screen').classList.remove('hidden');
+  SFX.pause();
+}
+function resumeGame() {
+  if (gameState !== 'paused') return;
+  gameState = pausedFrom === 'countdown' ? 'countdown' : 'playing';
+  $('pause-screen').classList.add('hidden');
+  SFX.click();
+}
+
+// ============ 特效 ============
+function spawnParticles(x, y, color, n, spd) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = (0.5 + Math.random()) * (spd || 3);
+    particles.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 1,
+      life: 1, decay: 0.02 + Math.random() * 0.02, color: color, size: 2 + Math.random() * 3 });
+  }
+}
+function addFloat(x, y, txt, color) {
+  floats.push({ x: x, y: y, txt: txt, color: color, t: 60 });
+}
+function updateEffects(dt) {
+  const k = dt / 16.67;
+  particles = particles.filter(p => {
+    p.x += p.vx * k; p.y += p.vy * k; p.vy += 0.12 * k;
+    p.life -= p.decay * k;
+    return p.life > 0;
+  });
+  floats = floats.filter(f => { f.t -= k; f.y -= 0.7 * k; return f.t > 0; });
+  if (gameState === 'playing') {
+    elapsed += dt;
+    if (comboTimer > 0) { comboTimer -= dt; if (comboTimer <= 0) combo = 1; }
+    if (slowTimer > 0) slowTimer -= dt;
+    if (starTimer > 0) starTimer -= dt;
+    foods = foods.filter(f => {
+      if (f.t === Infinity) return true;
+      f.t -= dt;
+      return f.t > 0;
+    });
+    // 穿墙波纹衰减
+    ripples = ripples.filter(r => { r.t += dt; return r.t < 550; });
+    // 迷宫障碍预警倒计时 → 实体化
+    pendingObs = pendingObs.filter(po => {
+      po.t -= dt;
+      if (po.t > 0) return true;
+      po.cells.forEach(c => {
+        obstacles.push(c);
+        const fi = foods.findIndex(f => f.x === c.x && f.y === c.y);
+        if (fi >= 0) { foods.splice(fi, 1); spawnFood('apple'); }   // 障碍压到食物则补投
+      });
+      flashA = Math.max(flashA, 0.12);
+      addFloat(W / 2, boardY + 30, '迷宫扩张!', '#ff44ff');
+      return false;
+    });
+  }
+  shake *= Math.pow(0.9, k);
+  flashA = Math.max(0, flashA - 0.03 * k);
+}
+
+// ============ 渲染 ============
+// 分模式主题: 每个模式有专属色彩氛围
+const THEME = {
+  classic: { line: '#00ff88', bg1: '#0c1810', bg2: '#0a1220' },
+  maze:    { line: '#ff44ff', bg1: '#150d20', bg2: '#10071c' },
+  turbo:   { line: '#ff8800', bg1: '#180f08', bg2: '#140709' },
+  online:  { line: '#00ffff', bg1: '#081618', bg2: '#0a0c1a' },
+};
+function drawBg() {
+  const th = THEME[mode] || THEME.classic;
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, th.bg1);
+  sky.addColorStop(1, th.bg2);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  // 棋盘底 + 网格
+  const bw = GRID.cols * cell, bh = GRID.rows * cell;
+  ctx.fillStyle = '#0a0a1a';
+  rrect(ctx, boardX - 6, boardY - 6, bw + 12, bh + 12, 10); ctx.fill();
+  ctx.strokeStyle = th.line + '66';
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = th.line;
+  ctx.shadowBlur = 12;
+  rrect(ctx, boardX - 6, boardY - 6, bw + 12, bh + 12, 10); ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // 网格线 (随呼吸微微脉动)
+  const gp = 0.04 + 0.025 * Math.sin(performance.now() / 900);
+  ctx.strokeStyle = 'rgba(0,255,255,' + gp.toFixed(3) + ')';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 1; i < GRID.cols; i++) { ctx.moveTo(boardX + i * cell, boardY); ctx.lineTo(boardX + i * cell, boardY + bh); }
+  for (let j = 1; j < GRID.rows; j++) { ctx.moveTo(boardX, boardY + j * cell); ctx.lineTo(boardX + bw, boardY + j * cell); }
+  ctx.stroke();
+}
+function drawObstacles() {
+  obstacles.forEach(o => {
+    const x = boardX + o.x * cell + 2, y = boardY + o.y * cell + 2, s = cell - 4;
+    ctx.fillStyle = '#2a1040';
+    rrect(ctx, x, y, s, s, 4); ctx.fill();
+    ctx.strokeStyle = '#ff44ff88'; ctx.lineWidth = 1.5;
+    rrect(ctx, x, y, s, s, 4); ctx.stroke();
+    ctx.fillStyle = '#ff44ff33';
+    ctx.fillRect(x + s * 0.3, y + s * 0.3, s * 0.4, s * 0.4);
+  });
+  // 预警虚影: 即将实体化的障碍 (闪烁提示, 公平可预判)
+  pendingObs.forEach(po => {
+    ctx.globalAlpha = 0.22 + 0.3 * Math.abs(Math.sin(performance.now() / 90));
+    po.cells.forEach(c => {
+      const x = boardX + c.x * cell + 2, y = boardY + c.y * cell + 2, s = cell - 4;
+      ctx.strokeStyle = '#ff44ff'; ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      rrect(ctx, x, y, s, s, 4); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#ff44ff22';
+      ctx.fillRect(x + 2, y + 2, s - 4, s - 4);
+    });
+    ctx.globalAlpha = 1;
+  });
+}
+function starPath(g, cx, cy, R, rot) {
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? R : R * 0.45;
+    const a = rot + Math.PI / 5 * i - Math.PI / 2;
+    const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+    if (i) g.lineTo(x, y); else g.moveTo(x, y);
+  }
+  g.closePath();
+}
+function drawFoods() {
+  const t = performance.now() / 1000;
+  foods.forEach(f => {
+    const cx = px(f.x), cy = py(f.y);
+    const pulse = 1 + Math.sin(t * 4 + f.x * 2) * 0.08;
+    // 特殊道具临期闪烁
+    let alpha = 1;
+    if (f.t !== Infinity && f.t < 2000) alpha = 0.35 + 0.65 * Math.abs(Math.sin(t * 10));
+    // 出生动画: 250ms 弹入
+    const bsc = Math.min(1, (performance.now() - (f.born || 0)) / 250);
+    ctx.globalAlpha = alpha * (0.3 + 0.7 * bsc);
+    ctx.save();
+    ctx.translate(cx, cy); ctx.scale(bsc, bsc); ctx.translate(-cx, -cy);
+    ctx.shadowBlur = 14;
+    if (f.type === 'apple') {
+      ctx.shadowColor = '#ff4444';
+      const r = cell * 0.36 * pulse;
+      ctx.fillStyle = '#ff3333';
+      ctx.beginPath(); ctx.arc(cx, cy + cell * 0.05, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#66dd44';
+      ctx.save(); ctx.translate(cx + r * 0.3, cy - r * 0.95); ctx.rotate(-0.6);
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.55, r * 0.28, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      ctx.fillStyle = '#ffffff88';
+      ctx.beginPath(); ctx.arc(cx - r * 0.35, cy - r * 0.2, r * 0.22, 0, Math.PI * 2); ctx.fill();
+    } else if (f.type === 'gold') {
+      ctx.shadowColor = '#ffd700';
+      const r = cell * 0.4 * pulse;
+      ctx.fillStyle = '#ffd700';
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#aa8800'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, r * 0.62, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) {
+        const a = t * 1.5 + Math.PI / 2 * i;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * (r + 3), cy + Math.sin(a) * (r + 3));
+        ctx.lineTo(cx + Math.cos(a) * (r + 7), cy + Math.sin(a) * (r + 7));
+        ctx.stroke();
+      }
+    } else if (f.type === 'star') {
+      ctx.shadowColor = '#ffee00';
+      ctx.fillStyle = '#ffee00';
+      starPath(ctx, cx, cy, cell * 0.42 * pulse, t * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff88'; ctx.lineWidth = 1;
+      starPath(ctx, cx, cy, cell * 0.42 * pulse, t * 2); ctx.stroke();
+    } else if (f.type === 'clock') {
+      ctx.shadowColor = '#00ccff';
+      const r = cell * 0.38 * pulse;
+      ctx.fillStyle = '#003344';
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#00ccff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - r * 0.6);
+      ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(t * 6) * r * 0.45, cy + Math.sin(t * 6) * r * 0.45);
+      ctx.stroke();
+    } else if (f.type === 'scissors') {
+      ctx.shadowColor = '#00ffaa';
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.sin(t * 3) * 0.25);
+      ctx.strokeStyle = '#00ffaa'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-cell * 0.3, -cell * 0.26); ctx.lineTo(cell * 0.28, cell * 0.24);
+      ctx.moveTo(-cell * 0.3, cell * 0.26); ctx.lineTo(cell * 0.28, -cell * 0.24);
+      ctx.stroke();
+      ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.arc(-cell * 0.36, -cell * 0.32, cell * 0.1, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(-cell * 0.36, cell * 0.32, cell * 0.1, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  });
+}
+// 蛇身插值点 (穿墙无缝: 按环绕差值插值)
+function snakePoints(t) {
+  const wrap = MODE_CONF[mode].wrap || starTimer > 0;
+  const pts = [];
+  for (let i = 0; i < snake.length; i++) {
+    const c = snake[i];
+    const p = prevSnake[i] !== undefined ? prevSnake[i] : c;
+    let dx = c.x - p.x, dy = c.y - p.y;
+    if (wrap) {
+      if (dx > GRID.cols / 2) dx -= GRID.cols;
+      if (dx < -GRID.cols / 2) dx += GRID.cols;
+      if (dy > GRID.rows / 2) dy -= GRID.rows;
+      if (dy < -GRID.rows / 2) dy += GRID.rows;
+    }
+    let fx = p.x + dx * t, fy = p.y + dy * t;
+    if (wrap) {
+      fx = ((fx % GRID.cols) + GRID.cols) % GRID.cols;
+      fy = ((fy % GRID.rows) + GRID.rows) % GRID.rows;
+    }
+    pts.push({ x: px(fx), y: py(fy) });
+  }
+  return pts;
+}
+// 残影绘制 (极速模式: 上两步身体位置, 半透明橙色)
+function drawGhostBody(arr, alpha, w) {
+  if (!arr || arr.length < 2) return;
+  const pts = arr.map(p => ({ x: px(p.x), y: py(p.y) }));
+  const runs = [];
+  let cur = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const d = Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y);
+    if (d > cell * 1.6) { runs.push(cur); cur = [pts[i]]; }
+    else cur.push(pts[i]);
+  }
+  runs.push(cur);
+  ctx.globalAlpha = alpha;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#ff8800';
+  ctx.lineWidth = w;
+  runs.forEach(run => {
+    if (run.length === 1) return;
+    ctx.beginPath();
+    ctx.moveTo(run[0].x, run[0].y);
+    for (let i = 1; i < run.length; i++) ctx.lineTo(run[i].x, run[i].y);
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+}
+function drawSnake(t) {
+  const pts = snakePoints(t);
+  const now = performance.now() / 1000;
+  const star = starTimer > 0;
+  const turbo = mode === 'turbo';
+  const mainColor = star ? 'hsl(' + ((now * 300) % 360) + ',100%,60%)' : (turbo ? '#ff8800' : '#00ff88');
+
+  // 极速残影 (两层, 越远越淡)
+  if (turbo && !star) {
+    drawGhostBody(histB, 0.10, cell * 0.5);
+    drawGhostBody(histA, 0.22, cell * 0.6);
+  }
+
+  // 主体: 分段折线 (穿墙接缝处断开)
+  const runs = [];
+  let cur = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const d = Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y);
+    if (d > cell * 1.6) { runs.push(cur); cur = [pts[i]]; }
+    else cur.push(pts[i]);
+  }
+  runs.push(cur);
+
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.shadowColor = mainColor; ctx.shadowBlur = 14;
+  ctx.strokeStyle = mainColor;
+  ctx.lineWidth = cell * 0.72;
+  runs.forEach(run => {
+    if (run.length === 1) {
+      ctx.beginPath(); ctx.arc(run[0].x, run[0].y, cell * 0.36, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(run[0].x, run[0].y);
+    for (let i = 1; i < run.length; i++) ctx.lineTo(run[i].x, run[i].y);
+    ctx.stroke();
+  });
+  ctx.shadowBlur = 0;
+
+  // 鳞节 (交替色点, 星星模式彩虹渐变, 极速模式橙红)
+  for (let i = 1; i < pts.length; i++) {
+    ctx.fillStyle = star
+      ? 'hsl(' + ((now * 300 + i * 14) % 360) + ',100%,45%)'
+      : turbo ? (i % 2 ? '#ff6600' : '#ee5500')
+      : (i % 2 ? '#00cc6a' : '#00b85c');
+    ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, cell * 0.22, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 蛇头 + 眼睛 + 舌头
+  const hx = pts[0].x, hy = pts[0].y;
+  const fx = dir.x, fy = dir.y;
+  ctx.fillStyle = mainColor;
+  ctx.shadowColor = mainColor; ctx.shadowBlur = 16;
+  ctx.beginPath(); ctx.arc(hx, hy, cell * 0.42, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // 舌头 (周期吐信)
+  if (now % 3.4 < 0.4) {
+    ctx.strokeStyle = '#ff3355'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    const tx = hx + fx * cell * 0.42, ty = hy + fy * cell * 0.42;
+    const ex = tx + fx * cell * 0.3, ey = ty + fy * cell * 0.3;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty); ctx.lineTo(ex, ey);
+    ctx.moveTo(ex, ey); ctx.lineTo(ex + fy * cell * 0.12 - fx * cell * 0.05, ey + fx * cell * 0.12 * (fy ? 0 : 1) - fy * cell * 0.05);
+    ctx.stroke();
+  }
+
+  // 眼睛 (朝移动方向, 偶尔眨眼)
+  const blink = (now % 3.2) < 0.12 ? 0.15 : 1;
+  const exo = fy !== 0 ? cell * 0.18 : 0, eyo = fx !== 0 ? cell * 0.18 : 0;
+  [[1, 1], [-1, -1]].forEach(sgn => {
+    const ox = hx + exo * sgn[0] + fx * cell * 0.12;
+    const oy = hy + eyo * sgn[1] + fy * cell * 0.12;
+    ctx.fillStyle = '#ffffff';
+    ctx.save(); ctx.translate(ox, oy);
+    ctx.scale(1, blink);
+    ctx.beginPath(); ctx.arc(0, 0, cell * 0.13, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#101010';
+    ctx.beginPath(); ctx.arc(fx * cell * 0.05, fy * cell * 0.05, cell * 0.065, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+}
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+function drawFloats() {
+  floats.forEach(f => {
+    ctx.globalAlpha = Math.min(1, f.t / 20);
+    ctx.font = 'bold 13px Courier New';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#000000bb'; ctx.lineWidth = 3;
+    ctx.strokeText(f.txt, f.x, f.y);
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.txt, f.x, f.y);
+  });
+  ctx.globalAlpha = 1;
+}
+function drawHud() {
+  // 顶部: 得分 / 模式 / 最高分
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 26px Courier New';
+  ctx.fillStyle = '#00ff88';
+  ctx.strokeStyle = '#003322'; ctx.lineWidth = 1;
+  ctx.fillText(String(score).padStart(6, '0'), 14, 36);
+  ctx.font = 'bold 11px Courier New';
+  ctx.fillStyle = '#00ff8899';
+  ctx.fillText('SCORE', 14, 50);
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 13px Courier New';
+  ctx.fillStyle = '#00ffff';
+  ctx.fillText(MODE_CONF[mode].label + '模式', W / 2, 30);
+  ctx.font = 'bold 11px Courier New';
+  ctx.fillStyle = '#ffd70099';
+  ctx.fillText('最高 ' + best[mode], W / 2, 48);
+
+  // 连击 (右侧, 倒计时条) ; 触屏单机时左移, 避开右上暂停按钮
+  if (combo > 1 && comboTimer > 0) {
+    const cR = (isTouchDevice() && mode !== 'online') ? W - 66 : W - 14;
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 18px Courier New';
+    ctx.fillStyle = '#ffff00';
+    ctx.strokeStyle = '#00000088'; ctx.lineWidth = 3;
+    const ct = 'x' + combo;
+    ctx.strokeText(ct, cR, 34); ctx.fillText(ct, cR, 34);
+    ctx.fillStyle = '#333';
+    ctx.fillRect(cR - 70, 40, 70, 4);
+    ctx.fillStyle = '#ffff00';
+    ctx.fillRect(cR - 70, 40, 70 * (comboTimer / 3500), 4);
+  }
+
+  // 效果状态图标 + 剩余条
+  let ex = 14;
+  if (starTimer > 0) {
+    ctx.fillStyle = '#ffee00';
+    starPath(ctx, ex + 9, 78, 9, 0); ctx.fill();
+    ctx.fillStyle = '#333'; ctx.fillRect(ex + 22, 74, 56, 4);
+    ctx.fillStyle = '#ffee00'; ctx.fillRect(ex + 22, 74, 56 * (starTimer / 5000), 4);
+    ex += 90;
+  }
+  if (slowTimer > 0) {
+    ctx.strokeStyle = '#00ccff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(ex + 9, 78, 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ex + 9, 78); ctx.lineTo(ex + 9, 72); ctx.moveTo(ex + 9, 78); ctx.lineTo(ex + 13, 80); ctx.stroke();
+    ctx.fillStyle = '#333'; ctx.fillRect(ex + 22, 74, 56, 4);
+    ctx.fillStyle = '#00ccff'; ctx.fillRect(ex + 22, 74, 56 * (slowTimer / 6000), 4);
+  }
+
+  // 底部: 长度 / 等级 (迷宫另计障碍数)
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 11px Courier New';
+  ctx.fillStyle = '#8899aa';
+  let info = 'LEN ' + snake.length + '   LV ' + (1 + Math.floor(apples / 3));
+  if (mode === 'maze') info += '   障碍 ' + obstacles.length;
+  ctx.fillText(info, 14, H - 12);
+}
+// 穿墙波纹 (经典模式: 出入口扩散圆环)
+function drawRipples() {
+  ripples.forEach(r => {
+    const k = r.t / 550;
+    ctx.globalAlpha = (1 - k) * 0.7;
+    ctx.strokeStyle = '#00ff88';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(px(r.x), py(r.y), cell * (0.35 + k * 2.4), 0, Math.PI * 2);
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+}
+// 开局倒计时大数字 (3 → 2 → 1, 脉冲缩放)
+function drawCountdown() {
+  const n = Math.max(1, Math.ceil(countdownT / 700));
+  const frac = (countdownT % 700) / 700;
+  const sc = 1 + frac * 0.35;
+  ctx.save();
+  ctx.translate(W / 2, boardY + GRID.rows * cell / 2);
+  ctx.scale(sc, sc);
+  ctx.font = 'bold 84px Courier New';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 6;
+  ctx.strokeText(String(n), 0, 0);
+  ctx.fillStyle = '#00ff88';
+  ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 20;
+  ctx.fillText(String(n), 0, 0);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+  ctx.font = 'bold 13px Courier New';
+  ctx.fillStyle = '#00ffff';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('准备...', W / 2, boardY + GRID.rows * cell / 2 + 66);
+}
+function draw() {
+  ctx.save();
+  if (shake > 0.3) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+
+  drawBg();
+  if (gameState !== 'menu') {
+    if (mode === 'online') {
+      drawNetFoods();
+      drawNetSnakes();
+      drawParticles();
+      drawFloats();
+      drawNetHud();
+    } else {
+      drawObstacles();
+      drawFoods();
+      drawRipples();
+      // 插值进度: 当前步进累积 / 步长
+      const t = Math.min(1, stepAcc / currentInterval());
+      if (gameState === 'dying' || gameState === 'over') {
+        // 死亡: 蛇头变灰白瘫在原地
+        drawSnakeDead();
+      } else {
+        drawSnake(t);
+      }
+      drawParticles();
+      drawFloats();
+      drawHud();
+      if (gameState === 'countdown') drawCountdown();
+    }
+  }
+  ctx.restore();
+
+  // 白闪
+  if (flashA > 0) {
+    ctx.fillStyle = 'rgba(255,255,255,' + flashA.toFixed(3) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+  // 暗角
+  const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.45, W / 2, H / 2, Math.max(W, H) * 0.75);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+}
+function drawSnakeDead() {
+  // 死亡定格: 灰白蛇身
+  const pts = snakePoints(1);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#556677';
+  ctx.lineWidth = cell * 0.72;
+  const runs = [];
+  let cur = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const d = Math.abs(pts[i].x - pts[i - 1].x) + Math.abs(pts[i].y - pts[i - 1].y);
+    if (d > cell * 1.6) { runs.push(cur); cur = [pts[i]]; }
+    else cur.push(pts[i]);
+  }
+  runs.push(cur);
+  runs.forEach(run => {
+    if (run.length === 1) {
+      ctx.beginPath(); ctx.arc(run[0].x, run[0].y, cell * 0.36, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    ctx.beginPath(); ctx.moveTo(run[0].x, run[0].y);
+    for (let i = 1; i < run.length; i++) ctx.lineTo(run[i].x, run[i].y);
+    ctx.stroke();
+  });
+  // X 眼
+  const hx = pts[0].x, hy = pts[0].y;
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(s => {
+    const ox = hx + (dir.y !== 0 ? s[0] * cell * 0.18 : s[0] * cell * 0.18 * Math.abs(dir.y === 0 ? 0 : 1));
+    const oy = hy + (dir.x !== 0 ? s[1] * cell * 0.18 : s[1] * cell * 0.18);
+    ctx.beginPath();
+    ctx.moveTo(ox - 3, oy - 3); ctx.lineTo(ox + 3, oy + 3);
+    ctx.moveTo(ox + 3, oy - 3); ctx.lineTo(ox - 3, oy + 3);
+    ctx.stroke();
+  });
+}
+
+// ============ 主循环 ============
+let last = 0;
+function frame(ts) {
+  requestAnimationFrame(frame);
+  if (!last) last = ts;
+  let dt = ts - last; last = ts;
+  if (dt > 250) dt = 250;
+
+  if (gameState === 'playing') {
+    if (mode === 'online') {
+      // 联机: 房主跑权威模拟, 客户端只推进插值时钟
+      if (net.isHost) {
+        og.acc += dt;
+        let guard = 0;
+        while (og.acc >= NET_ITV && gameState === 'playing' && guard++ < 5) {
+          og.acc -= NET_ITV;
+          hostStep();
+        }
+      } else {
+        snapAcc += dt;
+      }
+      updateEffects(dt);
+    } else {
+      stepAcc += dt;
+      const itv = currentInterval();
+      let guard = 0;
+      while (stepAcc >= itv && gameState === 'playing' && guard++ < 8) {
+        stepAcc -= itv;
+        step();
+      }
+      updateEffects(dt);
+    }
+  } else if (gameState === 'countdown') {
+    // 单机开局倒计时: 跨秒哔声, 结束 GO!
+    const prevN = Math.ceil(countdownT / 700);
+    countdownT -= dt;
+    const nowN = Math.ceil(countdownT / 700);
+    if (nowN !== prevN && nowN >= 1) SFX.count();
+    if (countdownT <= 0) { gameState = 'playing'; SFX.go(); }
+    updateEffects(dt);
+  } else if (gameState === 'dying') {
+    deathT += dt;
+    // 慢动作粒子
+    updateEffects(dt * 0.35);
+    if (deathT > 1000) finishOver();
+  } else if (gameState === 'over') {
+    updateEffects(dt * 0.5);
+  }
+  draw();
+}
+requestAnimationFrame(frame);
+
+// ============ 输入 ============
+function queueDir(x, y) {
+  if (gameState !== 'playing') return;
+  // 联机: 房主操作 0 号蛇, 客户端把转向发给房主
+  if (mode === 'online') {
+    if (net.isHost) {
+      const s = og && og.snakes[0];
+      if (s && s.alive) pushNetDir(s, x, y);
+    } else if (net.conn && net.conn.open) {
+      net.conn.send({ t: 'dir', x: x, y: y });
+    }
+    return;
+  }
+  const lastD = dirQueue.length ? dirQueue[dirQueue.length - 1] : dir;
+  if (lastD.x === x && lastD.y === y) return;
+  if (lastD.x === -x && lastD.y === -y) return;   // 禁止 180° 掉头
+  if (dirQueue.length < 2) dirQueue.push({ x: x, y: y });
+}
+window.addEventListener('keydown', e => {
+  ensureAudio();
+  const k = e.code;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(k)) e.preventDefault();
+  if (gameState === 'playing' || gameState === 'countdown') {
+    if (k === 'ArrowUp' || k === 'KeyW') queueDir(0, -1);
+    else if (k === 'ArrowDown' || k === 'KeyS') queueDir(0, 1);
+    else if (k === 'ArrowLeft' || k === 'KeyA') queueDir(-1, 0);
+    else if (k === 'ArrowRight' || k === 'KeyD') queueDir(1, 0);
+    else if (k === 'Escape' && mode === 'online') requestNetExit();   // 联机: Esc 两段式退出
+    else if (k === 'KeyP' || k === 'Escape') pauseGame();
+  } else if (gameState === 'paused') {
+    if (k === 'KeyP' || k === 'Escape' || k === 'Enter' || k === 'Space') resumeGame();
+  } else if (gameState === 'menu') {
+    if (k === 'Digit1') startGame('classic');
+    else if (k === 'Digit2') startGame('maze');
+    else if (k === 'Digit3') startGame('turbo');
+    else if (k === 'Digit4') { ensureAudio(); SFX.click(); openOnlineScreen(); }
+  } else if (gameState === 'over') {
+    if (mode === 'online') {
+      if ((k === 'Enter' || k === 'Space') && net.isHost) netRestart();
+      else if (k === 'Escape') backToMenu();
+    } else {
+      if (k === 'Enter' || k === 'Space') startGame(mode);
+      else if (k === 'Escape') backToMenu();
+    }
+  }
+});
+
+// 触屏滑动 (可连续滑动: 过阈值即触发并重设起点)
+let swipe = null;
+cv.addEventListener('pointerdown', e => {
+  ensureAudio();
+  swipe = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('pointermove', e => {
+  if (!swipe) return;
+  const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
+  if (Math.abs(dx) > 32 || Math.abs(dy) > 32) {
+    if (Math.abs(dx) > Math.abs(dy)) queueDir(dx > 0 ? 1 : -1, 0);
+    else queueDir(0, dy > 0 ? 1 : -1);
+    swipe = { x: e.clientX, y: e.clientY };   // 重设起点, 支持不抬手连续转向
+  }
+});
+window.addEventListener('pointerup', () => { swipe = null; });
+window.addEventListener('pointercancel', () => { swipe = null; });
+
+// 虚拟方向键
+document.querySelectorAll('#dpad button').forEach(b => {
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    ensureAudio();
+    const d = b.dataset.dir.split(',');
+    queueDir(parseInt(d[0]), parseInt(d[1]));
+  });
+  b.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+// ============ 联机对抗核心 ============
+let net = { peer: null, conn: null, conns: [], isHost: false, code: '', inRoom: false,
+            started: false, idx: 0, lobby: [null, null, null, null], lastPlayers: null };
+let og = null;                                    // 房主: 权威对局状态
+let snapPrev = null, snapCur = null, snapAcc = 0; // 客户端: 双快照插值
+let lastNetCd = 0;
+
+function genCode() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let c = '';
+  for (let i = 0; i < 4; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+function netBroadcast(m) { net.conns.forEach(c => { if (c.open) c.send(m); }); }
+function netError(msg) { $('net-error').textContent = msg || ''; }
+function myIdx() { return net.isHost ? 0 : net.idx; }
+
+function netCleanup() {
+  try { if (net.peer) net.peer.destroy(); } catch (e) {}
+  net = { peer: null, conn: null, conns: [], isHost: false, code: '', inRoom: false,
+          started: false, idx: 0, lobby: [null, null, null, null], lastPlayers: null };
+  og = null; snapPrev = null; snapCur = null; snapAcc = 0; lastNetCd = 0;
+  padTop = 62; padBottom = 12;
+  killStreak = {};
+}
+window.addEventListener('beforeunload', () => { try { if (net.peer) net.peer.destroy(); } catch (e) {} });
+
+function myName() {
+  let n = ($('net-name').value || '').trim().toUpperCase().slice(0, 8);
+  if (!n) n = 'SNAKE' + (10 + Math.floor(Math.random() * 89));
+  try { localStorage.setItem('snakeGongfuName', n); } catch (e) {}
+  return n;
+}
+function openOnlineScreen() {
+  if (typeof Peer === 'undefined') { alert('联网组件加载失败, 请检查网络后刷新页面'); return; }
+  hideAllScreens();
+  $('online-screen').classList.remove('hidden');
+  $('net-entry').classList.remove('hidden');
+  $('net-room').classList.add('hidden');
+  netError('');
+  try { $('net-name').value = localStorage.getItem('snakeGongfuName') || ''; } catch (e) {}
+}
+function showRoomPanel() {
+  $('net-entry').classList.add('hidden');
+  $('net-room').classList.remove('hidden');
+  $('net-code-show').textContent = net.code;
+  $('net-start-btn').classList.add('hidden');
+  $('net-wait-hint').classList.toggle('hidden', net.isHost);
+  renderNetLobby();
+}
+function renderNetLobby() {
+  const el = $('net-lobby-list');
+  el.innerHTML = '';
+  let count = 0;
+  net.lobby.forEach((nm, i) => {
+    if (!nm) return;
+    count++;
+    const row = document.createElement('div');
+    row.className = 'lobby-row';
+    const dot = document.createElement('div');
+    dot.className = 'lobby-dot';
+    dot.style.background = NET_COLORS[i];
+    dot.style.boxShadow = '0 0 6px ' + NET_COLORS[i];
+    row.appendChild(dot);
+    const sp = document.createElement('span');
+    sp.textContent = nm;
+    row.appendChild(sp);
+    const tag = document.createElement('span');
+    tag.className = 'lobby-tag';
+    tag.textContent = (i === 0 ? '房主' : '') + (i === myIdx() ? ' 你' : '');
+    row.appendChild(tag);
+    el.appendChild(row);
+  });
+  $('net-status').textContent = count + ' / 4 人在线' +
+    (net.isHost ? (count >= 2 ? ' · 可以开局' : ' · 至少 2 人才能开局') : '');
+  if (net.isHost) $('net-start-btn').classList.toggle('hidden', count < 2);
+}
+
+// ---------- 房主: 建房 ----------
+function netCreateRoom() {
+  netCleanup();
+  net.isHost = true; net.inRoom = true; net.idx = 0;
+  net.code = genCode();
+  net.lobby = [myName(), null, null, null];
+  netError('');
+  net.peer = new Peer(NET_PREFIX + net.code, { config: NET_ICE });
+  net.peer.on('error', err => {
+    if (err && err.type === 'unavailable-id') { try { net.peer.destroy(); } catch (e) {} netCreateRoom(); return; }
+    netError('创建失败: ' + ((err && err.type) || '网络错误'));
+  });
+  net.peer.on('open', showRoomPanel);
+  net.peer.on('connection', conn => {
+    if (net.started || !net.isHost) { setTimeout(() => conn.close(), 100); return; }
+    conn.on('open', () => {
+      const slot = net.lobby.findIndex(s => !s);
+      if (slot < 1 || net.conns.length >= 3) { setTimeout(() => conn.close(), 100); return; }
+      conn._idx = slot;
+      net.lobby[slot] = '...';
+      net.conns.push(conn);
+      renderNetLobby();
+    });
+    conn.on('data', d => {
+      if (!d) return;
+      if (d.t === 'hello') {
+        const nm = String(d.n || '').toUpperCase().slice(0, 8) || 'SNAKE';
+        net.lobby[conn._idx] = nm;
+        try { conn.send({ t: 'welcome', idx: conn._idx }); } catch (e) {}
+        netBroadcast({ t: 'lobby', players: net.lobby });
+        renderNetLobby();
+      } else if (d.t === 'dir' && net.started && og) {
+        const s = og.snakes[conn._idx];
+        if (s && s.alive) pushNetDir(s, d.x | 0, d.y | 0);
+      }
+    });
+    conn.on('close', () => {
+      const i = net.conns.indexOf(conn);
+      if (i >= 0) net.conns.splice(i, 1);
+      if (!net.started && net.lobby[conn._idx]) {
+        net.lobby[conn._idx] = null;
+        netBroadcast({ t: 'lobby', players: net.lobby });
+        renderNetLobby();
+      } else if (net.started && og && og.snakes[conn._idx]) {
+        const s = og.snakes[conn._idx];
+        s.gone = true;
+        if (s.alive) {
+          s.alive = false; s.respawn = Infinity;
+          og.events.push(['die', s.i, -1, s.segs[0].x, s.segs[0].y]);
+          netFxLocal('die', s.i, -1, s.segs[0].x, s.segs[0].y);
+        }
+      }
+    });
+  });
+}
+
+// ---------- 客户端: 加入 ----------
+function netJoinRoom() {
+  const code = ($('net-join-code').value || '').trim().toUpperCase();
+  if (code.length !== 4) { netError('请输入 4 位房码'); return; }
+  netCleanup();
+  net.isHost = false; net.inRoom = true; net.code = code;
+  netError('');
+  let welcomed = false;
+  const joinTimeout = setTimeout(() => {
+    if (!welcomed) { netError('连接超时, 请检查房码和网络'); netCleanup(); }
+  }, 12000);
+  net.peer = new Peer({ config: NET_ICE });
+  net.peer.on('error', err => {
+    clearTimeout(joinTimeout);
+    netError('加入失败: ' + (err && err.type === 'peer-unavailable' ? '房间不存在或已关闭' : ((err && err.type) || '网络错误')));
+  });
+  net.peer.on('open', () => {
+    net.conn = net.peer.connect(NET_PREFIX + code, { reliable: true });
+    net.conn.on('open', () => net.conn.send({ t: 'hello', n: myName() }));
+    net.conn.on('data', d => {
+      if (!d) return;
+      if (d.t === 'welcome') { welcomed = true; clearTimeout(joinTimeout); net.idx = d.idx; showRoomPanel(); }
+      else if (d.t === 'lobby') { net.lobby = d.players; if (welcomed) renderNetLobby(); }
+      else if (d.t === 'start') { net.lastPlayers = d.players; netStartRound(d.players, d.cols, d.rows); }
+      else if (d.t === 's') applyNetState(d);
+      else if (d.t === 'end-session') { netError('房主已关闭房间'); setTimeout(() => { netCleanup(); backToMenu(); }, 900); }
+    });
+    net.conn.on('close', () => {
+      clearTimeout(joinTimeout);
+      if (!welcomed) { netError('连接已断开, 房码可能有误'); return; }
+      if (net.inRoom) { netError('与房主断开连接'); setTimeout(() => { netCleanup(); backToMenu(); }, 900); }
+    });
+  });
+}
+
+function netLeaveRoom() {
+  if (net.isHost) { try { netBroadcast({ t: 'end-session' }); } catch (e) {} }
+  netCleanup();
+  openOnlineScreen();
+}
+
+// ---------- 联机中途退出 (两段式确认, 防误触) ----------
+let exitArmT = 0;
+function resetExitBtn() {
+  exitArmT = 0;
+  const b = $('exit-btn');
+  b.textContent = '✕ 退出';
+  b.classList.remove('armed');
+}
+function requestNetExit() {
+  if (mode !== 'online' || !net.started) return;
+  const b = $('exit-btn');
+  if (exitArmT && performance.now() - exitArmT < 2500) {
+    // 第二次点击: 确认退出
+    SFX.click();
+    if (net.isHost) { try { netBroadcast({ t: 'end-session' }); } catch (e) {} }
+    netCleanup();
+    backToMenu();
+  } else {
+    // 第一次点击: 进入待确认状态 (2.5 秒内再点生效)
+    exitArmT = performance.now();
+    b.textContent = '确认退出?';
+    b.classList.add('armed');
+    SFX.pause();
+    setTimeout(() => { if (exitArmT && performance.now() - exitArmT >= 2400) resetExitBtn(); }, 2500);
+  }
+}
+
+// ---------- 房主: 开局 / 重开 ----------
+function netHostStart() {
+  if (!net.isHost) return;
+  const count = net.lobby.filter(Boolean).length;
+  if (count < 2) return;
+  pickGrid();   // 房主按自己屏幕方向定棋盘
+  const msg = { t: 'start', players: net.lobby, cols: GRID.cols, rows: GRID.rows };
+  netBroadcast(msg);
+  netStartRound(net.lobby, GRID.cols, GRID.rows);
+}
+function netRestart() { if (net.isHost) netHostStart(); }
+
+// ---------- 共用: 一局初始化 ----------
+function netStartRound(players, cols, rows) {
+  mode = 'online';
+  net.started = true;
+  GRID.cols = cols; GRID.rows = rows;
+  // 顶部留白: HUD(62) + 4人计分板(78) ; 联机不可暂停 → 显示退出按钮 (全设备)
+  padTop = 140; padBottom = 12;
+  if (isTouchDevice()) $('dpad').classList.remove('hidden');
+  $('pause-btn').style.display = 'none';
+  resetExitBtn();
+  $('exit-btn').style.display = ''; $('exit-btn').classList.remove('hidden');
+  resize();
+  particles = []; floats = [];
+  shake = 0; flashA = 0;
+  snapPrev = null; snapCur = null; snapAcc = 0; lastNetCd = 0;
+  killStreak = {};
+  gameState = 'playing';
+  hideAllScreens();
+  tryAutoFullscreen();
+  if (net.isHost) {
+    og = { snakes: [], foods: [], acc: 0, time: NET_ROUND, cd: NET_CD, over: false, winner: null, events: [] };
+    players.forEach((nm, i) => {
+      if (!nm) { og.snakes.push(null); return; }
+      const s = { i: i, name: nm, color: NET_COLORS[i], segs: [], prev: [],
+                  dir: { x: 1, y: 0 }, queue: [], alive: true, respawn: 0,
+                  score: 0, kills: 0, grow: 0, gone: false };
+      spawnNetSnake(s);
+      og.snakes.push(s);
+    });
+    const pc = players.filter(Boolean).length;
+    for (let k = 0; k < pc + 1; k++) spawnNetFood(false);
+  }
+}
+
+// ---------- 房主: 生成 / 食物 ----------
+function spawnNetSnake(s) {
+  for (let tries = 0; tries < 80; tries++) {
+    const x = 3 + ((Math.random() * (GRID.cols - 6)) | 0);
+    const y = 1 + ((Math.random() * (GRID.rows - 2)) | 0);
+    let ok = true;
+    og.snakes.forEach(b => {
+      if (!b) return;
+      b.segs.forEach(p => { if (Math.max(Math.abs(p.x - x), Math.abs(p.y - y)) < 5) ok = false; });
+    });
+    if (!ok) continue;
+    const dx = x < GRID.cols / 2 ? 1 : -1;
+    s.dir = { x: dx, y: 0 };
+    s.segs = [];
+    for (let k = 0; k < 4; k++) s.segs.push({ x: (x - dx * k + GRID.cols) % GRID.cols, y: y });
+    s.prev = s.segs.map(p => ({ x: p.x, y: p.y }));
+    s.alive = true; s.grow = 0; s.queue = [];
+    return;
+  }
+  // 兜底: 场地太挤时随便放
+  s.segs = [{ x: 2, y: 2 }, { x: 1, y: 2 }, { x: 0, y: 2 }, { x: GRID.cols - 1, y: 2 }];
+  s.prev = s.segs.map(p => ({ x: p.x, y: p.y }));
+  s.alive = true;
+}
+function spawnNetFood(gold) {
+  for (let tries = 0; tries < 200; tries++) {
+    const x = (Math.random() * GRID.cols) | 0, y = (Math.random() * GRID.rows) | 0;
+    let ok = true;
+    og.snakes.forEach(b => {
+      if (!b) return;
+      if (b.alive && Math.max(Math.abs(b.segs[0].x - x), Math.abs(b.segs[0].y - y)) < 3) ok = false;
+      b.segs.forEach(p => { if (p.x === x && p.y === y) ok = false; });
+    });
+    if (!ok) continue;
+    if (og.foods.some(f => f.x === x && f.y === y)) continue;
+    og.foods.push({ x: x, y: y, gold: gold });
+    return;
+  }
+}
+
+// ---------- 房主: 输入队列 ----------
+function pushNetDir(s, x, y) {
+  const lastD = s.queue.length ? s.queue[s.queue.length - 1] : s.dir;
+  if (lastD.x === x && lastD.y === y) return;
+  if (lastD.x === -x && lastD.y === -y) return;   // 禁 180°
+  if (s.queue.length < 2) s.queue.push({ x: x, y: y });
+}
+
+// ---------- 房主: 权威步进 ----------
+function hostStep() {
+  if (!og || og.over) return;
+  if (og.cd > 0) {
+    const was = og.cd;
+    og.cd -= NET_ITV;
+    if (was > 0 && og.cd <= 0) SFX.go();
+    hostBroadcastState();
+    return;
+  }
+  // 只剩房主一人连线 → 提前结算
+  if (1 + net.conns.length < 2) { hostEndRound(); return; }
+  og.time -= NET_ITV;
+  if (og.time <= 0) { hostEndRound(); return; }
+
+  // 1. 所有活蛇同时移动
+  const acts = [];
+  og.snakes.forEach(s => {
+    if (!s || !s.alive) return;
+    while (s.queue.length) {
+      const d = s.queue.shift();
+      if (!(d.x === -s.dir.x && d.y === -s.dir.y) && !(d.x === s.dir.x && d.y === s.dir.y)) { s.dir = d; break; }
+    }
+    s.prev = s.segs.map(p => ({ x: p.x, y: p.y }));
+    const nh = { x: (s.segs[0].x + s.dir.x + GRID.cols) % GRID.cols,
+                 y: (s.segs[0].y + s.dir.y + GRID.rows) % GRID.rows };
+    const ns = [nh].concat(s.segs);
+    if (s.grow > 0) s.grow--; else ns.pop();
+    acts.push({ s: s, ns: ns, nh: nh });
+  });
+
+  // 2. 碰撞判定 (同时移动后互查: 自撞 / 撞他蛇身体 / 头对头 / 交换穿身)
+  const deadMap = new Map();
+  const markDead = (s, by) => { if (!deadMap.has(s)) deadMap.set(s, by); };
+  acts.forEach(a => {
+    acts.forEach(b => {
+      if (b === a) {
+        if (b.ns.slice(1).some(p => p.x === a.nh.x && p.y === a.nh.y)) markDead(a.s, -1);
+      } else {
+        if (b.nh.x === a.nh.x && b.nh.y === a.nh.y) { markDead(a.s, -2); markDead(b.s, -2); }
+        else if (a.nh.x === b.s.prev[0].x && a.nh.y === b.s.prev[0].y &&
+                 b.nh.x === a.s.prev[0].x && b.nh.y === a.s.prev[0].y) {
+          markDead(a.s, -2); markDead(b.s, -2);   // 互穿
+        }
+        else if (b.ns.slice(1).some(p => p.x === a.nh.x && p.y === a.nh.y)) markDead(a.s, b.s.i);
+      }
+    });
+  });
+  deadMap.forEach((by, s) => {
+    s.alive = false;
+    s.respawn = NET_RESPAWN;
+    s.score = Math.max(0, s.score - 15);
+    og.events.push(['die', s.i, by, s.segs[0].x, s.segs[0].y]);
+    netFxLocal('die', s.i, by, s.segs[0].x, s.segs[0].y);
+    if (by >= 0) {
+      const k = og.snakes[by];
+      if (k) { k.kills++; k.score += 25; }
+    }
+  });
+
+  // 3. 提交存活者新身体
+  acts.forEach(a => { if (a.s.alive) a.s.segs = a.ns; });
+
+  // 4. 重生倒计时
+  og.snakes.forEach(s => {
+    if (!s || s.alive || s.gone) return;
+    if (s.respawn !== Infinity && s.respawn > 0) {
+      s.respawn -= NET_ITV;
+      if (s.respawn <= 0) {
+        spawnNetSnake(s);
+        og.events.push(['spawn', s.i, -1, s.segs[0].x, s.segs[0].y]);
+        netFxLocal('spawn', s.i, -1, s.segs[0].x, s.segs[0].y);
+      }
+    }
+  });
+
+  // 5. 进食 (场上苹果数保持 人数+1)
+  og.snakes.forEach(s => {
+    if (!s || !s.alive) return;
+    const fi = og.foods.findIndex(f => f.x === s.segs[0].x && f.y === s.segs[0].y);
+    if (fi < 0) return;
+    const f = og.foods.splice(fi, 1)[0];
+    s.score += f.gold ? 50 : 10;
+    s.grow += f.gold ? 2 : 1;
+    og.events.push(['eat', s.i, f.gold ? 1 : 0, s.segs[0].x, s.segs[0].y]);
+    netFxLocal('eat', s.i, f.gold ? 1 : 0, s.segs[0].x, s.segs[0].y);
+    spawnNetFood(Math.random() < 0.12);
+  });
+
+  hostBroadcastState();
+}
+function hostEndRound() {
+  og.over = true;
+  let winner = null;
+  og.snakes.forEach(s => {
+    if (!s) return;
+    if (!winner || s.score > winner.score ||
+        (s.score === winner.score && s.segs.length > winner.segs.length)) winner = s;
+  });
+  og.winner = winner ? { i: winner.i, n: winner.name, s: winner.score } : null;
+  hostBroadcastState();
+  gameState = 'over';
+  netShowOver(og.winner);
+}
+function hostBroadcastState() {
+  netBroadcast({
+    t: 's', cd: og.cd, time: Math.max(0, og.time),
+    sn: og.snakes.map(s => {
+      if (!s) return [0, null, 0, 0, 1, 0];
+      const flat = [s.alive ? 1 : 0, s.respawn, s.score, s.kills, s.dir.x, s.dir.y];
+      s.segs.forEach(p => flat.push(p.x, p.y));
+      return flat;
+    }),
+    fd: og.foods.map(f => [f.x, f.y, f.gold ? 1 : 0]),
+    ev: og.events,
+    ov: og.over ? og.winner : 0
+  });
+  og.events = [];
+}
+
+// ---------- 客户端: 应用快照 ----------
+function applyNetState(d) {
+  const sn = d.sn.map((a, i) => {
+    const segs = [];
+    for (let k = 6; k + 1 < a.length; k += 2) segs.push({ x: a[k], y: a[k + 1] });
+    return {
+      i: i, alive: !!a[0], respawn: (a[1] == null ? 1e9 : a[1]),
+      score: a[2], kills: a[3], dir: { x: a[4], y: a[5] }, segs: segs,
+      name: (net.lastPlayers && net.lastPlayers[i]) || 'P' + (i + 1),
+      color: NET_COLORS[i]
+    };
+  });
+  snapPrev = snapCur;
+  snapCur = { sn: sn, fd: d.fd.map(f => ({ x: f[0], y: f[1], gold: !!f[2] })),
+              time: d.time, cd: d.cd };
+  snapAcc = 0;
+  if (lastNetCd > 0 && d.cd <= 0) SFX.go();
+  lastNetCd = d.cd;
+  (d.ev || []).forEach(e => netFxLocal(e[0], e[1], e[2], e[3], e[4]));
+  if (d.ov) { gameState = 'over'; netShowOver(d.ov); }
+}
+
+// ---------- 双端共用: 事件特效 ----------
+function netFxLocal(type, i, aux, x, y) {
+  const me = myIdx();
+  const sx = px(x), sy = py(y);
+  if (type === 'eat') {
+    const gold = aux;
+    spawnParticles(sx, sy, gold ? '#ffd700' : '#ff4444', gold ? 14 : 7, 3);
+    if (i === me) { gold ? SFX.gold() : SFX.eat(2); haptic(15); }
+    else tone(gold ? 740 : 520, 0.05, 'square', 0.05);
+  } else if (type === 'die') {
+    const col = i >= 0 && og && net.isHost ? (og.snakes[i] && og.snakes[i].color) : NET_COLORS[i];
+    spawnParticles(sx, sy, col || '#ff3333', 22, 4);
+    shake = Math.max(shake, i === me ? 12 : 6);
+    if (i === me) { SFX.die(); haptic([60, 40, 80]); }
+    else tone(200, 0.12, 'sawtooth', 0.08, 80);
+    if (aux >= 0) {
+      if (aux === me) { SFX.kill(); haptic(35); }
+      addFloat(sx, sy - cell * 0.8, '击杀 +25', NET_COLORS[aux]);
+      // 连杀播报: 3 秒内连续击杀 → DOUBLE KILL / TRIPLE KILL / RAMPAGE
+      const now = performance.now();
+      const ks = killStreak[aux] || { t: 0, n: 0 };
+      ks.n = (now - ks.t < 3000) ? ks.n + 1 : 1;
+      ks.t = now;
+      killStreak[aux] = ks;
+      if (ks.n >= 2) {
+        const label = ks.n === 2 ? 'DOUBLE KILL!' : ks.n === 3 ? 'TRIPLE KILL!' : 'RAMPAGE!';
+        addFloat(W / 2, boardY + GRID.rows * cell * 0.3, label, NET_COLORS[aux]);
+        SFX.streak(ks.n);
+        shake = Math.max(shake, 7);
+      }
+    }
+  } else if (type === 'spawn') {
+    spawnParticles(sx, sy, '#00ff88', 10, 2.5);
+    if (i === me) { SFX.spawnS(); haptic(20); }
+  }
+}
+
+// ---------- 联机结算 ----------
+function netShowOver(ov) {
+  gameState = 'over';
+  const me = myIdx();
+  const iWon = !!(ov && ov.i === me);
+  $('over-title').textContent = ov ? (iWon ? 'VICTORY!' : 'DEFEAT') : 'DRAW';
+  $('over-title').classList.toggle('win', iWon);
+  $('grade').style.display = 'none';
+  $('record-flash').classList.add('hidden');
+  $('net-winner').classList.remove('hidden');
+  $('net-winner').textContent = ov ? ('冠军: ' + ov.n + '  ' + ov.s + ' 分') : '无人获胜';
+  // 完整战报排行榜: 名次 / 玩家 / 击杀 / 长度 / 得分
+  const list = (net.isHost ? (og ? og.snakes : []) : (snapCur ? snapCur.sn : []))
+    .filter(Boolean)
+    .sort((a, b) => (b.score - a.score) || (b.kills - a.kills));
+  let html = '<div style="color:#00ffff">玩家</div><div style="color:#00ffff">击杀</div>' +
+             '<div style="color:#00ffff">长度</div><div style="color:#00ffff">得分</div>';
+  list.forEach((s, r) => {
+    const c = s.i === me ? '#00ff88' : '#aabbcc';
+    html += '<div style="color:' + c + '">' + (r + 1) + '. ' + s.name + '</div>' +
+            '<div><b>' + s.kills + '</b></div>' +
+            '<div><b>' + ((s.segs && s.segs.length) || 0) + '</b></div>' +
+            '<div><b>' + s.score + '</b></div>';
+  });
+  $('over-stats').style.gridTemplateColumns = 'repeat(4, minmax(64px, 110px))';
+  $('over-stats').style.fontSize = '12px';
+  $('over-stats').innerHTML = html;
+  if (net.isHost) {
+    $('restart-btn').classList.remove('hidden');
+    $('net-restart-hint').classList.add('hidden');
+  } else {
+    $('restart-btn').classList.add('hidden');
+    $('net-restart-hint').classList.remove('hidden');
+  }
+  $('over-screen').classList.remove('hidden');
+  $('dpad').classList.add('hidden');
+  resetExitBtn(); $('exit-btn').style.display = 'none';
+  if (iWon) SFX.record();
+}
+
+// ---------- 联机渲染 ----------
+function lerpNetSegs(prev, cur, t) {
+  const pts = [];
+  for (let i = 0; i < cur.length; i++) {
+    const c = cur[i];
+    const p = (prev && prev[i]) ? prev[i] : c;
+    let dx = c.x - p.x, dy = c.y - p.y;
+    if (dx > GRID.cols / 2) dx -= GRID.cols;
+    if (dx < -GRID.cols / 2) dx += GRID.cols;
+    if (dy > GRID.rows / 2) dy -= GRID.rows;
+    if (dy < -GRID.rows / 2) dy += GRID.rows;
+    let fx = p.x + dx * t, fy = p.y + dy * t;
+    fx = ((fx % GRID.cols) + GRID.cols) % GRID.cols;
+    fy = ((fy % GRID.rows) + GRID.rows) % GRID.rows;
+    pts.push({ x: px(fx), y: py(fy) });
+  }
+  return pts;
+}
+function drawNetFoods() {
+  const list = net.isHost ? og.foods : (snapCur ? snapCur.fd : []);
+  const t = performance.now() / 1000;
+  list.forEach(f => {
+    const cx = px(f.x), cy = py(f.y);
+    const pulse = 1 + Math.sin(t * 4 + f.x * 2) * 0.08;
+    if (!f.gold) {
+      ctx.shadowColor = '#ff4444'; ctx.shadowBlur = 14;
+      const r = cell * 0.36 * pulse;
+      ctx.fillStyle = '#ff3333';
+      ctx.beginPath(); ctx.arc(cx, cy + cell * 0.05, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#66dd44';
+      ctx.save(); ctx.translate(cx + r * 0.3, cy - r * 0.95); ctx.rotate(-0.6);
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.55, r * 0.28, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      ctx.fillStyle = '#ffffff88';
+      ctx.beginPath(); ctx.arc(cx - r * 0.35, cy - r * 0.2, r * 0.22, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 14;
+      const r = cell * 0.4 * pulse;
+      ctx.fillStyle = '#ffd700';
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#aa8800'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, r * 0.62, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+  });
+}
+function drawNetSnakes() {
+  const t = net.isHost
+    ? Math.min(1, (og.acc / NET_ITV))
+    : Math.min(1, (snapAcc / NET_ITV));
+  let list = [], prevList = null;
+  if (net.isHost) {
+    list = og.snakes.filter(Boolean);
+  } else {
+    if (!snapCur) return;
+    list = snapCur.sn;
+    prevList = snapPrev ? snapPrev.sn : null;
+  }
+  const me = myIdx();
+  const now = performance.now() / 1000;
+  list.forEach(s => {
+    if (!s) return;
+    const prev = net.isHost ? s.prev : (prevList ? prevList[s.i].segs : null);
+    if (s.alive) {
+      const pts = lerpNetSegs(prev, s.segs, t);
+      const isSelf = s.i === me;
+      // 断开穿墙接缝
+      const runs = [];
+      let cur = [pts[0]];
+      for (let k = 1; k < pts.length; k++) {
+        const d = Math.abs(pts[k].x - pts[k - 1].x) + Math.abs(pts[k].y - pts[k - 1].y);
+        if (d > cell * 1.6) { runs.push(cur); cur = [pts[k]]; }
+        else cur.push(pts[k]);
+      }
+      runs.push(cur);
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = isSelf ? 18 : 10;
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = cell * 0.72;
+      runs.forEach(run => {
+        if (run.length === 1) {
+          ctx.fillStyle = s.color;
+          ctx.beginPath(); ctx.arc(run[0].x, run[0].y, cell * 0.36, 0, Math.PI * 2); ctx.fill();
+          return;
+        }
+        ctx.beginPath();
+        ctx.moveTo(run[0].x, run[0].y);
+        for (let k = 1; k < run.length; k++) ctx.lineTo(run[k].x, run[k].y);
+        ctx.stroke();
+      });
+      ctx.shadowBlur = 0;
+      // 鳞节
+      for (let k = 1; k < pts.length; k++) {
+        ctx.fillStyle = s.i === me ? (k % 2 ? '#ffffff33' : '#00000022') : '#0000002a';
+        ctx.beginPath(); ctx.arc(pts[k].x, pts[k].y, cell * 0.2, 0, Math.PI * 2); ctx.fill();
+      }
+      // 头 + 眼
+      const hx = pts[0].x, hy = pts[0].y;
+      const fx = s.dir.x, fy = s.dir.y;
+      ctx.fillStyle = s.color;
+      ctx.shadowColor = s.color; ctx.shadowBlur = isSelf ? 20 : 12;
+      ctx.beginPath(); ctx.arc(hx, hy, cell * 0.42, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      const blink = (now % 3.2) < 0.12 ? 0.15 : 1;
+      const exo = fy !== 0 ? cell * 0.18 : 0, eyo = fx !== 0 ? cell * 0.18 : 0;
+      [[1, 1], [-1, -1]].forEach(sgn => {
+        const ox = hx + exo * sgn[0] + fx * cell * 0.12;
+        const oy = hy + eyo * sgn[1] + fy * cell * 0.12;
+        ctx.fillStyle = '#ffffff';
+        ctx.save(); ctx.translate(ox, oy); ctx.scale(1, blink);
+        ctx.beginPath(); ctx.arc(0, 0, cell * 0.13, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#101010';
+        ctx.beginPath(); ctx.arc(fx * cell * 0.05, fy * cell * 0.05, cell * 0.065, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      });
+      // 名字牌
+      ctx.font = 'bold 10px Courier New';
+      ctx.textAlign = 'center';
+      const label = s.name + (isSelf ? ' ◄你' : '');
+      ctx.strokeStyle = '#000000bb'; ctx.lineWidth = 3;
+      ctx.strokeText(label, hx, hy - cell * 1.05);
+      ctx.fillStyle = isSelf ? '#ffffff' : s.color;
+      ctx.fillText(label, hx, hy - cell * 1.05);
+      // 自己: 头顶绿色箭头
+      if (isSelf) {
+        const bob = Math.sin(now * 5) * 2;
+        ctx.fillStyle = '#00ff88';
+        ctx.beginPath();
+        ctx.moveTo(hx - 6, hy - cell * 1.5 - 8 + bob);
+        ctx.lineTo(hx + 6, hy - cell * 1.5 - 8 + bob);
+        ctx.lineTo(hx, hy - cell * 1.5 + 1 + bob);
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (s.respawn < 1e8 && s.segs && s.segs.length) {
+      // 重生倒计时气泡
+      const cx = px(s.segs[0].x), cy = py(s.segs[0].y);
+      ctx.fillStyle = 'rgba(5,5,16,0.7)';
+      ctx.beginPath(); ctx.arc(cx, cy, cell * 0.55, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = s.color + '88'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(cx, cy, cell * 0.55, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = s.color;
+      ctx.font = 'bold 11px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.ceil(s.respawn / 1000) + 's', cx, cy + 4);
+    }
+  });
+}
+function drawNetHud() {
+  const st = net.isHost ? og : snapCur;
+  if (!st) return;
+  const me = myIdx();
+  // 回合计时 (顶部中央)
+  const secs = Math.max(0, Math.ceil(st.time / 1000));
+  const urgent = secs <= 10;
+  ctx.fillStyle = urgent ? (Math.floor(performance.now() / 220) % 2 ? '#ff3333' : '#ff8888') : '#ffcc00';
+  ctx.font = 'bold 26px Courier New';
+  ctx.textAlign = 'center';
+  ctx.strokeStyle = '#00000099'; ctx.lineWidth = 3;
+  const ts = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
+  ctx.strokeText(ts, W / 2, 34); ctx.fillText(ts, W / 2, 34);
+  // 开局倒计时
+  if (st.cd > 0) {
+    ctx.fillStyle = '#00ffff';
+    ctx.font = 'bold 70px Courier New';
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 5;
+    const n = Math.ceil(st.cd / 1000);
+    const txt = n > 0 ? String(n) : 'GO!';
+    ctx.strokeText(txt, W / 2, H / 2);
+    ctx.fillText(txt, W / 2, H / 2);
+  }
+  // 计分板 (左上, 按分数排序)
+  const rows = (net.isHost ? og.snakes.filter(Boolean) : snapCur.sn.slice())
+    .sort((a, b) => (b.score - a.score) || ((b.segs && b.segs.length) || 0) - ((a.segs && a.segs.length) || 0));
+  let ly = 66;
+  rows.forEach(s => {
+    const isSelf = s.i === me;
+    ctx.textAlign = 'left';
+    ctx.font = 'bold ' + (isSelf ? 13 : 12) + 'px Courier New';
+    // 底色条
+    ctx.fillStyle = isSelf ? 'rgba(0,255,136,0.12)' : 'rgba(10,10,26,0.6)';
+    rrect(ctx, 10, ly - 12, 150, 17, 4); ctx.fill();
+    ctx.fillStyle = s.color;
+    ctx.beginPath(); ctx.arc(20, ly - 3.5, 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = isSelf ? '#ffffff' : s.color;
+    let label = (isSelf ? '►' : ' ') + s.name + '  ' + s.score;
+    if (!s.alive) label += s.respawn >= 1e8 ? ' ✖' : ' (' + Math.ceil(s.respawn / 1000) + 's)';
+    ctx.fillText(label, 30, ly);
+    if (s.kills > 0) {
+      ctx.fillStyle = '#ff8800';
+      ctx.fillText('x' + s.kills, 148, ly);
+    }
+    ly += 20;
+  });
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 11px Courier New';
+  ctx.fillStyle = '#8899aa';
+  ctx.fillText('击杀+25 · 死亡-15', 14, H - 12);
+}
+
+// ============ 界面按钮 ============
+function bindClick(id, fn) { $(id).addEventListener('click', () => { ensureAudio(); SFX.click(); fn(); }); }
+bindClick('m-classic', () => startGame('classic'));
+bindClick('m-maze', () => startGame('maze'));
+bindClick('m-turbo', () => startGame('turbo'));
+bindClick('m-online', openOnlineScreen);
+bindClick('net-create-btn', netCreateRoom);
+bindClick('net-join-btn', netJoinRoom);
+bindClick('net-leave-btn', netLeaveRoom);
+bindClick('net-start-btn', netHostStart);
+bindClick('net-back-btn', backToMenu);
+bindClick('resume-btn', resumeGame);
+bindClick('p-restart-btn', () => startGame(mode));
+bindClick('p-menu-btn', backToMenu);
+bindClick('restart-btn', () => { if (mode === 'online') netRestart(); else startGame(mode); });
+bindClick('menu-btn', backToMenu);
+bindClick('pause-btn', () => { if (gameState === 'playing' || gameState === 'countdown') pauseGame(); });
+bindClick('exit-btn', requestNetExit);
+bindClick('hall-btn', () => { SFX.click(); location.href = './lobby.html'; });   // 返回游戏大厅
+bindClick('net-hall-btn', () => { SFX.click(); location.href = './lobby.html'; });   // 联机大厅→游戏大厅
+// 房码输入框回车 = 加入
+$('net-join-code').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); ensureAudio(); netJoinRoom(); }
+});
+
+function syncMuteBtns() {
+  const txt = '音效: ' + (soundOn ? '开' : '关');
+  $('mute-btn').textContent = txt;
+  $('p-mute-btn').textContent = txt;
+}
+$('mute-btn').addEventListener('click', () => {
+  soundOn = !soundOn;
+  try { localStorage.setItem('snakeGongfuSound', soundOn ? '1' : '0'); } catch (e) {}
+  syncMuteBtns(); SFX.click();
+});
+$('p-mute-btn').addEventListener('click', () => {
+  soundOn = !soundOn;
+  try { localStorage.setItem('snakeGongfuSound', soundOn ? '1' : '0'); } catch (e) {}
+  syncMuteBtns(); SFX.click();
+});
+
+// 失焦自动暂停 (联机对战不可暂停, 除外; 倒计时中失焦同样暂停)
+window.addEventListener('blur', () => {
+  if ((gameState === 'playing' || gameState === 'countdown') && mode !== 'online') pauseGame();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && (gameState === 'playing' || gameState === 'countdown') && mode !== 'online') pauseGame();
+});
+
+// ============ 启动 ============
+resize();
+refreshBestLabels();
+syncMuteBtns();
+</script>
+
+
+
+</body></html>

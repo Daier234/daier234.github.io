@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05050c">
+<title>恭夫游戏大厅 - GONGFU GAME HALL</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; min-height: 100%; background: #05050c; font-family: 'Courier New', monospace; }
+  body { overflow-x: hidden; }
+
+  /* 动态星空背景 */
+  #bg-cv { position: fixed; inset: 0; z-index: 0; display: block; }
+  .wrap { position: relative; z-index: 1; min-height: 100vh;
+    display: flex; flex-direction: column;
+    padding: 0 16px calc(20px + env(safe-area-inset-bottom)); }
+
+  /* ===== 顶栏 ===== */
+  header { padding-top: calc(22px + env(safe-area-inset-top)); text-align: center; }
+  .hall-logo { font-size: clamp(30px, 7vw, 52px); font-weight: bold; color: #00ff88;
+    letter-spacing: 10px; text-shadow: 0 0 26px #00ff88, 4px 4px 0 #004422; }
+  .hall-sub { font-size: 12px; color: #00ffffaa; letter-spacing: 6px; margin-top: 4px; }
+
+  /* 公告跑马灯 */
+  .notice { margin: 16px auto 0; width: min(680px, 94vw);
+    border: 1.5px solid #ffd70044; background: #141008; border-radius: 8px;
+    display: flex; align-items: center; overflow: hidden; }
+  .notice-tag { flex: none; background: #ffd700; color: #000; font-weight: bold;
+    font-size: 12px; padding: 7px 10px; letter-spacing: 1px; }
+  .notice-scroll { flex: 1; overflow: hidden; position: relative; height: 30px; }
+  .notice-scroll span { position: absolute; white-space: nowrap; font-size: 13px;
+    color: #ffd700; line-height: 30px; padding-left: 100%;
+    animation: marquee 18s linear infinite; }
+  @keyframes marquee { to { transform: translateX(-100%); } }
+
+  /* ===== 分类标签 ===== */
+  .tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 22px 0 6px; }
+  .tab { font-family: inherit; cursor: pointer; font-size: 13px; color: #00ffff;
+    background: #001a2288; border: 1.5px solid #00ffff44; border-radius: 20px;
+    padding: 7px 18px; transition: all .15s; }
+  .tab:hover { border-color: #00ffff; box-shadow: 0 0 10px #00ffff44; }
+  .tab.on { background: #00ffff; color: #000; font-weight: bold; box-shadow: 0 0 14px #00ffff88; }
+
+  /* 搜索框 */
+  .search-bar { margin: 14px auto 0; width: min(680px, 94vw); position: relative; display: flex; }
+  .s-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); font-size: 15px; opacity: 0.7; pointer-events: none; }
+  #search-input { flex: 1; font-family: inherit; font-size: 14px; color: #00ff88;
+    background: #0a0a1a; border: 2px solid #00ff8833; border-radius: 22px;
+    padding: 10px 42px 10px 38px; letter-spacing: 1px; }
+  #search-input:focus { outline: none; border-color: #00ff88; box-shadow: 0 0 16px #00ff8833; }
+  #search-input::placeholder { color: #446066; }
+  .s-clear { position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+    font-family: inherit; cursor: pointer; border: none; background: #22223a; color: #8899aa;
+    border-radius: 50%; width: 25px; height: 25px; font-size: 12px; line-height: 1; }
+  .s-clear:hover { background: #ff5577; color: #fff; }
+  .hidden { display: none !important; }
+
+  .hall-tip { text-align: center; font-size: 11px; color: #556677; margin: 8px 0 4px; letter-spacing: 1px; }
+
+  /* ===== 游戏卡片网格 ===== */
+  #games { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px; width: min(960px, 96vw); margin: 14px auto 0; flex: 1; }
+
+  .card { position: relative; border: 2px solid #00ffff33; background: #0a0a1a;
+    border-radius: 12px; overflow: hidden; cursor: pointer; transition: all .18s; }
+  .card:hover { border-color: #00ffff; box-shadow: 0 0 22px #00ffff44; transform: translateY(-3px); }
+  .card.coming { cursor: default; opacity: 0.75; }
+  .card.coming:hover { transform: none; border-color: #00ffff33; box-shadow: none; }
+
+  /* 封面 (纯 CSS 绘制, 无图片依赖) */
+  .cover { position: relative; height: 150px; display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 120%, hsl(var(--hue) 100% 22%) 0%, hsl(var(--hue) 80% 8%) 55%, #07070f 100%); }
+  .cover::before { content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent 0 22px, hsl(var(--hue) 100% 60% / 0.05) 22px 23px),
+                repeating-linear-gradient(90deg, transparent 0 22px, hsl(var(--hue) 100% 60% / 0.05) 22px 23px); }
+  .cover-icon { position: relative; font-size: 64px; filter: drop-shadow(0 0 16px hsl(var(--hue) 100% 50%));
+    animation: floaty 2.6s ease-in-out infinite; }
+  @keyframes floaty { 50% { transform: translateY(-7px) scale(1.05); } }
+  .cover-name { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center;
+    font-size: 19px; font-weight: bold; color: #fff; letter-spacing: 3px;
+    text-shadow: 0 0 12px hsl(var(--hue) 100% 50%), 2px 2px 0 #000; }
+
+  .badge { position: absolute; top: 10px; left: 10px; font-size: 11px; font-weight: bold;
+    padding: 3px 9px; border-radius: 4px; letter-spacing: 1px;
+    background: #ff3333; color: #fff; box-shadow: 0 0 10px #ff333388; animation: pulse 1.4s infinite; }
+  .badge.new { background: #00ccff; box-shadow: 0 0 10px #00ccff88; }
+  .badge.recent { left: auto; right: 10px; background: #ffd700; color: #000; box-shadow: 0 0 10px #ffd70088; animation: none; }
+  .badge.missing { left: auto; right: 10px; top: auto; bottom: 10px; background: #ff3344;
+    color: #fff; box-shadow: 0 0 10px #ff334488; animation: none; }
+  .card.missing { border-color: #ff334466; }
+  .card.missing .cover-icon { opacity: 0.4; }
+  @keyframes pulse { 50% { opacity: 0.55; } }
+
+  .card-body { padding: 12px 14px 14px; }
+  .card-desc { font-size: 12px; color: #8899aa; line-height: 1.6; min-height: 38px; }
+  .card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+  .ctag { font-size: 10px; color: hsl(var(--hue) 100% 65%); border: 1px solid hsl(var(--hue) 100% 40% / 0.5);
+    border-radius: 3px; padding: 2px 7px; }
+  .card-btn-row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .play-count { font-size: 10px; color: #556677; }
+  .play-btn { font-family: inherit; cursor: pointer; font-size: 14px; font-weight: bold;
+    color: #00ff88; background: #00ff8811; border: 2px solid #00ff88; border-radius: 8px;
+    padding: 8px 24px; letter-spacing: 2px; transition: all .15s; }
+  .play-btn:hover { background: #00ff88; color: #000; box-shadow: 0 0 16px #00ff88; }
+  .card.coming .play-btn { color: #556677; border-color: #55667766; background: transparent; cursor: default; }
+
+  /* ===== 底部 ===== */
+  footer { text-align: center; margin-top: 30px; padding-top: 16px;
+    border-top: 1px dashed #00ffff22; }
+  .foot-links { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .foot-links a { color: #ffd700; font-size: 13px; text-decoration: underline; letter-spacing: 1px; }
+  .foot-links a:visited { color: #ffd700; }
+  .foot-tech { font-size: 10px; color: #445566; line-height: 1.8; letter-spacing: 1px; }
+
+  @media (max-height: 700px) {
+    header { padding-top: calc(12px + env(safe-area-inset-top)); }
+    .notice { margin-top: 10px; }
+    .tabs { margin: 14px 0 4px; }
+    .cover { height: 118px; }
+    .cover-icon { font-size: 50px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="bg-cv"></canvas>
+<div class="wrap">
+
+  <header>
+    <div class="hall-logo">恭夫游戏大厅</div>
+    <div class="hall-sub">GONGFU GAME HALL · ONLINE ARCADE</div>
+    <div class="notice">
+      <div class="notice-tag">公告</div>
+      <div class="notice-scroll"><span id="notice-text">正在加载公告…</span></div>
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="search-bar">
+    <span class="s-icon">🔍</span>
+    <input id="search-input" type="search" placeholder="搜索游戏名 / 玩法 / 标签, 如: 联机" autocomplete="off">
+    <button id="search-clear" class="s-clear hidden">✕</button>
+  </div>
+  <div class="hall-tip" id="hall-tip">本大厅开源扩展: 在 lobby.html 的 GAMES 数组中添加一条即可接入新游戏</div>
+
+  <div id="games"></div>
+
+  <footer>
+    <div class="foot-links">
+      <a href="https://gqp.nat100.top">▶ 恭夫乡村平台 gqp.nat100.top</a>
+    </div>
+    <div class="foot-tech">恭夫游戏大厅 · 单文件零依赖 · 手机/电脑全适配<br>新游戏接入: GAMES 数组加一条 { name, file } 即可 (或同目录放 games.json) · 卡片/标签/搜索/最近游玩/文件名自适应全自动</div>
+  </footer>
+</div>
+
+<script>
+'use strict';
+// ============================================================
+// 恭夫游戏大厅 - 统一游戏入口
+// 架构: 数据驱动, 卡片/分类/搜索/最近游玩全自动生成
+//
+// 【接入新游戏 · 方式一】编辑下方 RAW_GAMES 数组, 最少只需两个字段:
+//     { name: '打砖块恭夫', file: 'brick.html' }
+//   其余字段全部可省略, 自动补全:
+//     id      省略 → 由文件名生成      icon  省略 → 自动分配 emoji
+//     desc    省略 → 默认简介          tags  省略 → ['单人挑战']
+//     hue     省略 → 自动轮换配色      badge 省略 → 无角标
+//   可选字段: altFile:'部署改名.html' | coming:true(预告位) | badge:'HOT'/'NEW'
+//   | tags:['联机','单人挑战',...] | hue:0-360 | icon:'🎮' | desc:'...'
+//
+// 【接入新游戏 · 方式二】与 lobby.html 同目录放一个 games.json (无需改本文件):
+//   [ { "name": "打砖块恭夫", "file": "brick.html" },
+//     { "name": "双人PK", "file": "pk.html", "tags": ["联机"] } ]
+//   加载后与本页列表自动合并去重 (同文件名的以 games.json 为准)。
+//   注意: 部署时记得把 games.json 一起上传。
+//
+// 稳健性: 缺 name/file 的条目自动跳过并控制台警告; id/file 重复自动去重;
+//         文件 404 时卡片自动挂红色"文件缺失"角标 (http 环境)。
+// ============================================================
+
+const RAW_GAMES = [
+  {
+    id: 'stickman',
+    name: '火柴人恭夫',
+    file: 'stickman-arcade.html',
+    altFile: 'index.html',
+    icon: '🥋',
+    desc: '霓虹火柴人格斗街机! 闯关模式 / 竞技场 / 联机 2~4 人 PK, 血包·命数·武器道具全配置, 头顶血条随动同步。',
+    tags: ['联机', '单人闯关', '格斗'],
+    hue: 120,
+    badge: 'HOT',
+  },
+  {
+    id: 'snake',
+    name: '贪吃蛇恭夫',
+    file: 'snake-arcade.html',
+    altFile: 'snake.html',
+    icon: '🐍',
+    desc: '专业街机贪吃蛇! 经典穿墙 / 迷宫预警 / 极速残影 / 联机 2~4 人限时对抗, 连击倍率 + 道具全特效。',
+    tags: ['联机', '单人挑战', '街机'],
+    hue: 150,
+    badge: 'NEW',
+  },
+  {
+    id: 'arkanoid',
+    name: '打砖块恭夫',
+    icon: '🧱',
+    desc: '霓虹打砖块, 多种道具弹球玩法, 敬请期待。此卡片演示如何预留新游戏位置。',
+    tags: ['单人挑战'],
+    hue: 30,
+    coming: true,
+  },
+
+  // ╔══════════════════════════════════════════════════════════╗
+  // ║  ★ 新游戏接入口 · 往下复制一条, 改成你的信息即可上架 ★      ║
+  // ║                                                          ║
+  // ║  { name: '游戏名字', file: '游戏文件名.html' },             ║
+  // ║                                                          ║
+  // ║  就这么短! 其余全自动: 图标/简介/标签/配色/分类            ║
+  // ║  想自定义再补可选字段 (全部可省):                          ║
+  // ║    icon: '🎮'        图标 emoji                           ║
+  // ║    desc: '一句话简介'                                     ║
+  // ║    tags: ['联机']    标签 (含'联机'才进联机分类)            ║
+  // ║    badge: 'NEW'      角标 HOT/NEW                         ║
+  // ║    coming: true      先占位, 文件做好后删掉此行即上架       ║
+  // ║    altFile: '部署名.html'  上传 GitHub 改名时填             ║
+  // ║                                                          ║
+  // ║  例: { name: '俄罗斯方块恭夫', file: 'tetris.html',         ║
+  // ║        icon: '🧩', tags: ['单人挑战'], badge: 'NEW' },     ║
+  // ╚══════════════════════════════════════════════════════════╝
+];
+
+// 公告内容 (按需修改)
+const NOTICE = '欢迎来到恭夫游戏大厅! · 贪吃蛇恭夫「联机对抗」模式火热上线, 房码建房 2~4 人限时 PK · 火柴人恭夫联机识别度全面升级 · 更多街机游戏持续接入中, 敬请期待!';
+
+// ============ 自动收纳引擎 ============
+// 标准化游戏条目: 补全缺省字段, 让新游戏最少只需 { name, file }
+const EMOJI_POOL = ['🎮', '🕹️', '👾', '🎯', '🚀', '⚡', '🔥', '💎', '🎲', '🧩', '🏆', '🥊'];
+function normalizeGames(raw) {
+  const out = [], seenFile = new Set(), seenId = new Set();
+  raw.forEach((g, i) => {
+    if (!g || !g.name || !g.file) {
+      console.warn('[大厅] 跳过无效游戏条目 (必须同时有 name 和 file):', g);
+      return;
+    }
+    const file = String(g.file);
+    if (seenFile.has(file)) return;             // 同名文件去重, 后写的覆盖不进 (内置优先, json 覆盖见下方合并顺序)
+    let id = g.id || file.replace(/\.html?$/i, '');
+    while (seenId.has(id)) id += '_';           // id 冲突自动改名, 绝不崩
+    seenFile.add(file); seenId.add(id);
+    out.push({
+      id: id, name: g.name, file: file,
+      altFile: g.altFile || null,
+      icon: g.icon || EMOJI_POOL[(g.name.length * 7 + i * 3) % EMOJI_POOL.length],
+      desc: g.desc || '全新恭夫街机游戏, 点击立即开玩!',
+      tags: (Array.isArray(g.tags) && g.tags.length) ? g.tags : ['单人挑战'],
+      hue: (g.hue != null) ? g.hue : (i * 67 + 120) % 360,
+      badge: g.badge || null,
+      coming: !!g.coming,
+    });
+  });
+  return out;
+}
+
+let GAMES = [];            // 标准化后的列表 (渲染用)
+function rebuildGames(extra) {
+  // games.json 条目排前 + 内置排后: 同名文件时 json 版本覆盖内置版
+  const merged = (extra || []).concat(RAW_GAMES);
+  const seenFile = new Set();
+  GAMES = normalizeGames(merged.filter(g => {
+    const f = String(g && g.file);
+    if (seenFile.has(f)) return false;
+    seenFile.add(f);
+    return true;
+  }));
+  renderTabs();
+  renderGames();
+  probeFiles();
+}
+
+// ============ 工具 ============
+const $ = s => document.querySelector(s);
+const recent = (() => {
+  try { return JSON.parse(localStorage.getItem('gongfuHallRecent') || '{}'); } catch (e) { return {}; }
+})();
+function markPlayed(id) {
+  try {
+    recent[id] = Date.now();
+    localStorage.setItem('gongfuHallRecent', JSON.stringify(recent));
+  } catch (e) {}
+}
+function recentLabel(id) {
+  const t = recent[id];
+  if (!t) return '';
+  const d = Date.now() - t;
+  if (d < 60000) return '刚刚玩过';
+  if (d < 3600000) return Math.floor(d / 60000) + ' 分钟前';
+  if (d < 86400000) return Math.floor(d / 3600000) + ' 小时前';
+  return Math.floor(d / 86400000) + ' 天前';
+}
+
+// ============ 文件名自适应 + 缺失探测 ============
+// 本地开发用原始文件名, 部署后若改名 (如 snake-arcade.html → snake.html) 自动切换;
+// 两个名字都不存在 → 卡片挂"文件缺失"红角标, 部署遗漏一眼可见
+const fileMap = {};       // id -> 实际可用的文件名
+const missingMap = {};    // id -> HTTP 状态码 (本地与备名都 404)
+function probeFiles() {
+  GAMES.forEach(g => {
+    if (g.coming) return;
+    fileMap[g.id] = g.file;
+    if (!/^https?:/.test(location.protocol)) return;   // file:// 本地直接用原名, 不探测
+    fetch(g.file, { method: 'HEAD' }).then(r => {
+      if (r.ok) return;
+      const tryAlt = () => {
+        if (!g.altFile) { markMissing(g.id, r.status); return; }
+        fetch(g.altFile, { method: 'HEAD' }).then(r2 => {
+          if (r2.ok) fileMap[g.id] = g.altFile;
+          else markMissing(g.id, r2.status);
+        }).catch(() => {});
+      };
+      tryAlt();
+    }).catch(() => {});
+  });
+}
+function markMissing(id, status) {
+  missingMap[id] = status || 404;
+  const card = document.querySelector('.card[data-gid="' + id + '"]');
+  if (!card) return;
+  card.classList.add('missing');
+  const bd = document.createElement('div');
+  bd.className = 'badge missing';
+  bd.textContent = '文件缺失 ' + (missingMap[id] || '');
+  card.querySelector('.cover').appendChild(bd);
+  const pc = card.querySelector('.play-count');
+  if (pc) pc.textContent = 'FILE NOT FOUND';
+  const btn = card.querySelector('.play-btn');
+  if (btn) { btn.textContent = '检查部署'; btn.disabled = true; btn.style.opacity = 0.5; }
+  console.warn('[大厅] 游戏文件未找到 (id=' + id + ', HTTP ' + missingMap[id] + ') — 请确认该 html 已上传或改用 altFile 填部署名');
+}
+
+function openGame(g) {
+  if (g.coming) {
+    const el = $('#hall-tip');
+    const backup = el.textContent;
+    el.textContent = '「' + g.name + '」正在开发中, 敬请期待! (在 RAW_GAMES 中删掉 coming:true 即可上架)';
+    el.style.color = '#ffd700';
+    setTimeout(() => { el.style.color = ''; el.textContent = backup; }, 2600);
+    return;
+  }
+  if (missingMap[g.id]) { markMissing(g.id, missingMap[g.id]); return; }   // 已知缺失 → 重新高亮, 不跳转
+  markPlayed(g.id);
+  const target = fileMap[g.id] || g.file;
+  // 点击时二次校验: 目标 404 (部署改名) → 自动切换备用文件名, 保证任何命名组合都能进游戏
+  const alt = (g.altFile && target !== g.altFile) ? g.altFile
+            : (target !== g.file ? g.file : null);
+  fetch(target, { method: 'HEAD' }).then(r => {
+    if (!r.ok && alt) {
+      fetch(alt, { method: 'HEAD' }).then(r2 => {
+        location.href = r2.ok ? alt : target;
+      }).catch(() => { location.href = target; });
+    } else if (!r.ok) {
+      markMissing(g.id, r.status);   // 探测到 404 → 标红提示, 防止跳 404 页
+    } else {
+      location.href = target;
+    }
+  }).catch(() => { location.href = target; });   // file:// 等无法探测 → 直接用当前映射 (本地原名存在)
+}
+
+// ============ 渲染 ============
+let curTab = 'all';
+let searchQ = '';      // 搜索关键词 (小写, 多词空格分隔 = 同时满足)
+const TABS = [
+  { key: 'all', label: '全部游戏' },
+  { key: 'online', label: '联机对战' },
+  { key: 'solo', label: '单人挑战' },
+  { key: 'coming', label: '即将上线' },
+];
+function renderTabs() {
+  const el = $('#tabs');
+  el.innerHTML = '';
+  TABS.forEach(t => {
+    const b = document.createElement('button');
+    b.className = 'tab' + (curTab === t.key ? ' on' : '');
+    b.textContent = t.label;
+    b.onclick = () => { curTab = t.key; renderTabs(); renderGames(); };
+    el.appendChild(b);
+  });
+}
+function matchTab(g) {
+  if (curTab === 'all') return true;
+  if (curTab === 'coming') return !!g.coming;
+  if (curTab === 'online') return !g.coming && g.tags && g.tags.includes('联机');
+  if (curTab === 'solo') return !g.coming && g.tags && g.tags.some(t => t !== '联机');
+  return true;
+}
+// 搜索匹配: 名字/简介/标签/ID 任意命中, 多个关键词需同时满足
+function matchSearch(g) {
+  if (!searchQ) return true;
+  const hay = (g.name + ' ' + (g.desc || '') + ' ' + (g.tags || []).join(' ') + ' ' + g.id).toLowerCase();
+  return searchQ.split(/\s+/).filter(Boolean).every(w => hay.includes(w));
+}
+function updateTip(n) {
+  const el = $('#hall-tip');
+  el.textContent = searchQ
+    ? '找到 ' + n + ' 款与「' + searchQ + '」相关的游戏 (分类: ' + (TABS.find(t => t.key === curTab) || {}).label + ')'
+    : '新游戏自动收纳: GAMES 数组最少写 { name, file } 两个字段即可上架 · 同目录 games.json 亦可扩展 · 当前分类共 ' + n + ' 款';
+}
+function renderGames() {
+  const el = $('#games');
+  el.innerHTML = '';
+  const list = GAMES.filter(g => matchTab(g) && matchSearch(g)).sort((a, b) => {
+    // 最近玩过的排最前
+    const ra = recent[a.id] || 0, rb = recent[b.id] || 0;
+    return rb - ra;
+  });
+  list.forEach(g => {
+    const card = document.createElement('div');
+    card.className = 'card' + (g.coming ? ' coming' : '');
+    card.style.setProperty('--hue', g.hue || 150);
+    card.dataset.gid = g.id;   // 供缺失探测 (markMissing) 定位卡片
+
+    const cover = document.createElement('div');
+    cover.className = 'cover';
+    const icon = document.createElement('div');
+    icon.className = 'cover-icon';
+    icon.textContent = g.icon || '🎮';
+    cover.appendChild(icon);
+    const nm = document.createElement('div');
+    nm.className = 'cover-name';
+    nm.textContent = g.name;
+    cover.appendChild(nm);
+    if (g.badge && !g.coming) {
+      const bd = document.createElement('div');
+      bd.className = 'badge' + (g.badge === 'NEW' ? ' new' : '');
+      bd.textContent = g.badge;
+      cover.appendChild(bd);
+    }
+    const rl = recentLabel(g.id);
+    if (rl && !g.coming) {
+      const rc = document.createElement('div');
+      rc.className = 'badge recent';
+      rc.textContent = rl;
+      cover.appendChild(rc);
+    }
+    card.appendChild(cover);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    const desc = document.createElement('div');
+    desc.className = 'card-desc';
+    desc.textContent = g.desc || '';
+    body.appendChild(desc);
+    const tags = document.createElement('div');
+    tags.className = 'card-tags';
+    (g.tags || []).forEach(t => {
+      const sp = document.createElement('span');
+      sp.className = 'ctag';
+      sp.textContent = t;
+      tags.appendChild(sp);
+    });
+    if (g.coming) {
+      const sp = document.createElement('span');
+      sp.className = 'ctag';
+      sp.textContent = '开发中';
+      tags.appendChild(sp);
+    }
+    body.appendChild(tags);
+    const row = document.createElement('div');
+    row.className = 'card-btn-row';
+    const pc = document.createElement('div');
+    pc.className = 'play-count';
+    pc.textContent = g.coming ? 'UNRELEASED' : 'GONGFU ARCADE';
+    const btn = document.createElement('button');
+    btn.className = 'play-btn';
+    btn.textContent = g.coming ? '敬请期待' : '开始游戏';
+    if (!g.coming) btn.onclick = ev => { ev.stopPropagation(); openGame(g); };
+    row.appendChild(pc);
+    row.appendChild(btn);
+    body.appendChild(row);
+    card.appendChild(body);
+
+    if (!g.coming) card.onclick = () => openGame(g);
+    el.appendChild(card);
+    if (missingMap[g.id]) markMissing(g.id, missingMap[g.id]);   // 重建列表后恢复缺失标识
+  });
+  if (!list.length) {
+    el.innerHTML = '<div style="text-align:center;color:#556677;padding:40px 0;grid-column:1/-1">' +
+      (searchQ ? '未找到与「' + searchQ + '」相关的游戏, 试试其他关键词' : '该分类暂无游戏') + '</div>';
+  }
+  updateTip(list.length);
+}
+
+// ============ 星空背景 ============
+const bg = $('#bg-cv'), bgx = bg.getContext('2d');
+let stars = [];
+function bgResize() {
+  bg.width = innerWidth; bg.height = innerHeight;
+  stars = [];
+  const n = Math.floor(innerWidth * innerHeight / 9000);
+  for (let i = 0; i < n; i++) {
+    stars.push({ x: Math.random() * bg.width, y: Math.random() * bg.height,
+      r: Math.random() * 1.4 + 0.3, p: Math.random() * Math.PI * 2, s: 0.5 + Math.random() });
+  }
+}
+addEventListener('resize', bgResize);
+bgResize();
+(function bgLoop(t) {
+  bgx.clearRect(0, 0, bg.width, bg.height);
+  const tt = t / 1000;
+  stars.forEach(s => {
+    const a = 0.25 + 0.5 * Math.abs(Math.sin(s.p + tt * s.s));
+    bgx.fillStyle = 'rgba(0,255,255,' + a.toFixed(2) + ')';
+    bgx.beginPath(); bgx.arc(s.x, s.y, s.r, 0, Math.PI * 2); bgx.fill();
+  });
+  // 底部霓虹地平线
+  const g = bgx.createLinearGradient(0, bg.height - 90, 0, bg.height);
+  g.addColorStop(0, 'rgba(0,255,136,0)');
+  g.addColorStop(1, 'rgba(0,255,136,0.07)');
+  bgx.fillStyle = g;
+  bgx.fillRect(0, bg.height - 90, bg.width, 90);
+  requestAnimationFrame(bgLoop);
+})(0);
+
+// ============ 搜索框 ============
+const sInput = $('#search-input'), sClear = $('#search-clear');
+sInput.addEventListener('input', () => {
+  searchQ = sInput.value.trim().toLowerCase();
+  sClear.classList.toggle('hidden', !searchQ);
+  renderGames();
+});
+sInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') e.preventDefault();   // 防止手机键盘回车触发表单行为
+});
+sClear.addEventListener('click', () => {
+  sInput.value = ''; searchQ = '';
+  sClear.classList.add('hidden');
+  renderGames();
+  sInput.focus();
+});
+
+// ============ 启动 ============
+$('#notice-text').textContent = NOTICE;
+rebuildGames([]);        // 先用内置列表渲染 (games.json 到达后自动合并重渲)
+// 外置 games.json (可选): 与 lobby.html 同目录即自动加载合并, 加新游戏无需改本文件
+fetch('./games.json').then(r => r.ok ? r.json() : null).then(arr => {
+  if (Array.isArray(arr) && arr.length) rebuildGames(arr);
+}).catch(() => {});     // 无 games.json / file:// 打不开 → 静默使用内置列表
+</script>
+</body>
+</html>

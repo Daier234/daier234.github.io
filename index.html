@@ -282,6 +282,7 @@
     </div>
 
     <a href="https://gqp.nat100.top" class="link-btn">▶ 访问 恭夫乡村平台 gqp.nat100.top</a>
+    <button class="btn small" id="hall-btn" style="border-color:#ffd700;color:#ffd700;background:#ffd70022">🏠 返回 恭夫游戏大厅</button>
 
     <div class="controls-info">
       <div><span>P1</span> WASD+JKL &nbsp;|&nbsp; <span>P2</span> 方向键+小键盘123 &nbsp;|&nbsp; 联机全员用P1键位</div>
@@ -323,7 +324,10 @@
     </div>
 
     <div id="net-error" style="color:#ff4444;font-size:12px;margin-top:10px;min-height:16px"></div>
-    <button class="btn small" id="net-back-btn" style="margin-top:4px;border-color:#666;color:#666;background:#66666622">返回主菜单</button>
+    <div class="mode-row" style="margin-top:4px">
+      <button class="btn small" id="net-back-btn" style="border-color:#666;color:#666;background:#66666622">返回主菜单</button>
+      <button class="btn small" id="net-hall-btn" style="border-color:#ffd700;color:#ffd700;background:#ffd70022">🏠 恭夫游戏大厅</button>
+    </div>
   </div>
 
   <!-- 暂停界面 -->
@@ -334,6 +338,7 @@
       <button class="btn" id="resume-btn">▶ 继续游戏</button>
       <button class="btn" id="pause-menu-btn" style="border-color:#ff4444;color:#ff4444;background:#ff444422">返回菜单</button>
     </div>
+    <button class="btn small" id="pause-hall-btn" style="border-color:#ffd700;color:#ffd700;background:#ffd70022">🏠 恭夫游戏大厅</button>
   </div>
 
   <!-- 结算界面 -->
@@ -346,6 +351,7 @@
       <button class="btn" id="restart-btn">再来一局</button>
       <button class="btn" id="menu-btn" style="border-color:#00ffff;color:#00ffff;background:#00ffff22">返回菜单</button>
     </div>
+    <button class="btn small" id="over-hall-btn" style="border-color:#ffd700;color:#ffd700;background:#ffd70022">🏠 恭夫游戏大厅</button>
   </div>
 </div>
 
@@ -2304,6 +2310,12 @@ document.getElementById('pause-menu-btn').addEventListener('click', () => {
   paused = false;
   document.getElementById('pause-screen').classList.add('hidden');
   backToMenu();
+});
+
+// 返回恭夫游戏大厅 (主菜单 / 暂停 / 结算 / 联机大厅四处入口; 页面跳转自动断开联机)
+function goHall() { location.href = './lobby.html'; }
+['hall-btn', 'pause-hall-btn', 'over-hall-btn', 'net-hall-btn'].forEach(id => {
+  document.getElementById(id).addEventListener('click', goHall);
 });
 
 document.querySelectorAll('[data-mode]').forEach(btn => {
