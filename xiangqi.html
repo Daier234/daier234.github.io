@@ -1,0 +1,2362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05050c">
+<title>象棋恭夫 - 街机游戏</title>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05050c; font-family: 'Courier New', monospace; }
+  #wrap { position: fixed; inset: 0; }
+  #cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+
+  #scanlines { position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.16) 0 1px, transparent 1px 3px); }
+
+  /* ===== 界面层 ===== */
+  .screen { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    align-items: center; gap: 12px; background: rgba(5,5,12,0.82);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    padding: 18px; text-align: center; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-top: max(18px, env(safe-area-inset-top));
+    padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  .screen > *:first-child { margin-top: auto; }
+  .screen > *:last-child { margin-bottom: auto; }
+  .hidden { display: none !important; }
+
+  .game-title { font-size: clamp(30px, 7vw, 54px); font-weight: bold; color: #ff4455;
+    letter-spacing: 8px; text-shadow: 0 0 22px #ff4455, 3px 3px 0 #440011; }
+  .game-sub { font-size: 13px; color: #ffd700aa; letter-spacing: 4px; margin-top: -6px; }
+
+  .btn { font-family: inherit; cursor: pointer; border: 2px solid #ff4455; color: #ff4455;
+    background: #ff445511; padding: 12px 30px; font-size: 16px; font-weight: bold;
+    letter-spacing: 3px; transition: all .15s; }
+  .btn:hover { background: #ff4455; color: #000; box-shadow: 0 0 15px #ff4455; }
+  .btn.cyan { border-color: #00ffff; color: #00ffff; background: #00ffff11; }
+  .btn.cyan:hover { background: #00ffff; color: #000; box-shadow: 0 0 15px #00ffff; }
+  .btn.gold { border-color: #ffd700; color: #ffd700; background: #ffd70011; }
+  .btn.gold:hover { background: #ffd700; color: #000; box-shadow: 0 0 15px #ffd700; }
+  .btn.gray { border-color: #667788; color: #667788; background: #66778811; }
+  .btn.gray:hover { background: #667788; color: #000; }
+  .btn.small { padding: 8px 18px; font-size: 13px; }
+
+  .mode-grid { display: grid; grid-template-columns: 1fr; gap: 12px; width: min(420px, 92vw); }
+  .mode-card { border: 2px solid #ffd70044; background: #0a0a1a;
+    padding: 13px 18px; cursor: pointer; transition: all .15s; text-align: left; }
+  .mode-card:hover { border-color: #ffd700; box-shadow: 0 0 18px #ffd70044; transform: translateY(-2px); }
+  .mode-name { font-size: 18px; font-weight: bold; color: #ffd700; letter-spacing: 2px; }
+  .mode-desc { font-size: 12px; color: #8899aa; margin-top: 4px; line-height: 1.5; }
+
+  .diff-panel { width: min(420px, 92vw); border: 2px solid #00ffff44; background: #0a0a1a; padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px; }
+  .diff-panel h3 { color: #00ffff; font-size: 15px; letter-spacing: 3px; }
+
+  .help-box { font-size: 12px; color: #7788aa; line-height: 1.9; max-width: 480px; }
+  .help-box b { color: #ff8899; }
+
+  .site-link { color: #ffd700; font-size: 14px; text-decoration: underline; letter-spacing: 1px; }
+  .site-link:visited { color: #ffd700; }
+
+  /* ===== 联机 ===== */
+  #online-screen { gap: 10px; }
+  .net-title { font-size: 26px; font-weight: bold; color: #00ffff; letter-spacing: 5px;
+    text-shadow: 0 0 18px #00ffff88; }
+  .net-panel { width: min(400px, 92vw); border: 1.5px solid #00ffff33; background: #0a0a1a;
+    padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .net-panel h3 { font-size: 14px; color: #00ffff; letter-spacing: 2px; }
+  .net-row { display: flex; gap: 8px; align-items: center; }
+  .net-input { flex: 1; font-family: inherit; background: #050510; color: #00ff88;
+    border: 1.5px solid #00ff8855; padding: 9px 12px; font-size: 15px; letter-spacing: 3px;
+    text-transform: uppercase; min-width: 0; }
+  .net-input:focus { outline: none; border-color: #00ff88; }
+  .net-code { font-size: 30px; font-weight: bold; color: #ffd700; letter-spacing: 10px;
+    text-shadow: 0 0 18px #ffd70088; padding: 6px 0; }
+  #net-error { color: #ff5577; font-size: 13px; min-height: 18px; }
+  #net-lobby-list { display: flex; flex-direction: column; gap: 5px; }
+  .lobby-row { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #ffffff;
+    background: #101024; border: 1px solid #22224a; padding: 6px 12px; }
+  .lobby-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  #net-status { font-size: 12px; color: #8899aa; min-height: 16px; }
+
+  /* ===== 对局中按钮 ===== */
+  #ib-menu { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px; z-index: 8;
+    width: 42px; height: 42px;
+    font-family: inherit; font-size: 18px; color: #00ffff; background: #001a2288;
+    border: 1.5px solid #00ffff66; border-radius: 10px; }
+
+  /* ===== 棋谱回放栏 ===== */
+  #replay-bar { position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 15;
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(8,10,20,0.94); border: 1.5px solid #ffd70066; border-radius: 12px;
+    padding: 8px 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.65); max-width: 96vw; }
+  #replay-bar button { font-family: inherit; cursor: pointer; color: #ffd700; background: #ffd70011;
+    border: 1.5px solid #ffd70066; border-radius: 8px; padding: 7px 10px; font-size: 14px; line-height: 1;
+    transition: all .15s; }
+  #replay-bar button:hover { background: #ffd700; color: #000; }
+  #replay-bar #rp-exit { color: #ff5577; border-color: #ff557766; background: #ff557711; }
+  #replay-bar #rp-exit:hover { background: #ff5577; color: #fff; }
+  #rp-info { display: flex; flex-direction: column; align-items: center; gap: 2px;
+    min-width: 108px; max-width: 42vw; }
+  #rp-step { font-size: 12px; color: #00ffff; letter-spacing: 2px; }
+  #rp-text { font-size: 13px; color: #ffffff; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; max-width: 42vw; font-family: 'KaiTi','SimSun',serif; }
+  @media (max-width: 480px) {
+    #replay-bar { gap: 4px; padding: 7px 8px; }
+    #replay-bar button { padding: 6px 7px; font-size: 12px; }
+    #rp-info { min-width: 88px; }
+    #rp-text { font-size: 12px; }
+  }
+
+  /* 矮屏压缩 */
+  @media (max-height: 780px) {
+    .screen { gap: 9px; }
+    .mode-card { padding: 10px 14px; }
+  }
+  @media (max-height: 640px) {
+    .screen { gap: 7px; padding-left: 12px; padding-right: 12px; }
+    .game-title { font-size: clamp(24px, 5vw, 38px); letter-spacing: 5px; }
+    .game-sub { margin-top: -4px; font-size: 11px; }
+    .mode-card { padding: 8px 12px; }
+    .mode-name { font-size: 15px; }
+    .mode-desc { font-size: 11px; }
+    .help-box { font-size: 11px; line-height: 1.6; }
+    .btn { padding: 9px 20px; font-size: 14px; }
+    .btn.small { padding: 6px 13px; font-size: 12px; }
+    .site-link { font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv"></canvas>
+  <div id="scanlines"></div>
+  <button id="ib-menu" class="hidden" style="display:none">☰</button>
+
+  <!-- ===== 主菜单 ===== -->
+  <div id="menu-screen" class="screen">
+    <div class="game-title">象棋恭夫</div>
+    <div class="game-sub">XIANGQI GONGFU ARCADE</div>
+
+    <div class="mode-grid">
+      <div class="mode-card" id="m-ai">
+        <div class="mode-name">① 人机对战</div>
+        <div class="mode-desc">挑战恭夫AI! 三档棋力, 可执红先行或执黑后行, 支持悔棋/求和。</div>
+      </div>
+      <div class="mode-card" id="m-local">
+        <div class="mode-name">② 双人同屏</div>
+        <div class="mode-desc">一部手机/电脑轮流落子, 红黑对决, 各10分钟。</div>
+      </div>
+      <div class="mode-card" id="m-online">
+        <div class="mode-name">③ 联机对抗 <span style="color:#ff5577; font-size:12px">HOT</span></div>
+        <div class="mode-desc">房码建房, 远程真人PK! 房主执红先行, 计时对弈。</div>
+      </div>
+    </div>
+
+    <div class="diff-panel hidden" id="diff-panel">
+      <h3>选择 AI 棋力</h3>
+      <button class="btn small cyan" id="d-easy">初学 (快棋, 偶有失误)</button>
+      <button class="btn small cyan" id="d-normal">进阶 (认真思考)</button>
+      <button class="btn small cyan" id="d-hard">大师 (深度计算)</button>
+      <button class="btn small" id="d-side-btn">执子: 你执红先行</button>
+      <button class="btn small gray" id="d-back">返回</button>
+    </div>
+
+    <div class="help-box">
+      <b>规则</b>: 点选己方棋子 → 绿点可走, 金圈可吃 · 马蹩腿 / 象塞眼 / 炮翻山 / 士不出宫 / 将不照面<br>
+      不能<b>送将</b> · 无子可动判负(困毙) · <b>长将判负</b> · 三次重复局面判和 · 60回合无吃子判和 · 每方10分钟, 超时判负<br>
+      <b>悔棋</b>: 人机悔棋撤销你上一手 · 同屏双人需双方确认 · 联机为申请制, 对方同意才回退 (对局中与结算后均可申请)<br>
+      <b>回放</b>: 对局中(菜单)或结算后可打开棋谱回放, 逐步复盘全程着法, 支持自动播放<br>
+      <b>求和</b>: 人机模式 AI 审时度势决定 · 同屏双人直接确认 · 联机为申请制, 对方同意即和<br>
+      <b>先后手</b>: 人机可选执红/执黑 · 联机"换边再战"每局轮换先后手, 公平对弈 · 认输有二次确认防误触<br>
+      <b>联机</b>: 房主创建房间分享4位房码, 好友加入后开局
+    </div>
+
+    <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center">
+      <button class="btn small" id="mute-btn">音效: 开</button>
+      <button class="btn small gold" id="hall-btn">🏠 恭夫游戏大厅</button>
+    </div>
+    <a class="site-link" href="https://gqp.nat100.top">恭夫乡村平台 gqp.nat100.top</a>
+  </div>
+
+  <!-- ===== 联机 ===== -->
+  <div id="online-screen" class="screen hidden">
+    <div class="net-title">联 机 对 弈</div>
+    <div class="net-panel">
+      <h3>你的昵称</h3>
+      <div class="net-row">
+        <input class="net-input" id="nick-input" placeholder="输入昵称" maxlength="8" style="text-transform:none">
+      </div>
+    </div>
+    <div class="net-panel">
+      <h3>创建房间 (执红先行)</h3>
+      <button class="btn small cyan" id="net-create-btn">创建房间</button>
+      <div class="net-code" id="net-code-show">----</div>
+      <div id="net-lobby-list"></div>
+      <div id="net-status"></div>
+      <button class="btn hidden" id="net-start-btn">开 始 对 弈</button>
+      <div id="net-wait-hint" class="hidden" style="font-size:12px; color:#ffd700">等待房主开始对弈...</div>
+      <button class="btn small gray hidden" id="net-leave-btn">离开房间</button>
+    </div>
+    <div class="net-panel">
+      <h3>加入房间 (执黑后行)</h3>
+      <div class="net-row">
+        <input class="net-input" id="net-join-code" placeholder="4位房码" maxlength="4">
+        <button class="btn small cyan" id="net-join-btn">加入</button>
+      </div>
+    </div>
+    <div id="net-error"></div>
+    <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center">
+      <button class="btn small gray" id="net-back-btn">返回菜单</button>
+      <button class="btn small gold" id="net-hall-btn">🏠 恭夫游戏大厅</button>
+    </div>
+    <a class="site-link" href="https://gqp.nat100.top">恭夫乡村平台 gqp.nat100.top</a>
+  </div>
+
+  <!-- ===== 暂停/对局菜单 ===== -->
+  <div id="pause-screen" class="screen hidden">
+    <div class="game-title" style="font-size:34px; color:#00ffff; text-shadow:0 0 18px #00ffff">菜单</div>
+    <div id="pause-info" style="color:#8899aa; font-size:14px; line-height:1.8"></div>
+    <button class="btn cyan" id="resume-btn">继 续 对 弈</button>
+    <button class="btn gold" id="p-undo-btn">悔 棋</button>
+    <button class="btn small" id="p-draw-btn">求 和</button>
+    <button class="btn small cyan hidden" id="p-replay-btn">棋 谱 回 放</button>
+    <button class="btn small" id="p-resign-btn">认 输</button>
+    <button class="btn small" id="p-mute-btn">音效: 开</button>
+    <button class="btn small gray" id="p-menu-btn">返回菜单</button>
+    <button class="btn small gold" id="p-hall-btn">🏠 恭夫游戏大厅</button>
+  </div>
+
+  <!-- ===== 结算 ===== -->
+  <div id="over-screen" class="screen hidden">
+    <div class="game-title" id="over-title" style="font-size:44px">胜 利</div>
+    <div id="over-reason" style="color:#ffd700; font-size:16px; letter-spacing:2px"></div>
+    <div id="over-stats" style="color:#8899aa; font-size:14px; line-height:2"></div>
+    <button class="btn" id="restart-btn">再 来 一 局</button>
+    <button class="btn small cyan hidden" id="over-replay-btn">棋 谱 回 放</button>
+    <button class="btn small cyan hidden" id="over-undo-btn">悔 棋</button>
+    <button class="btn small gray" id="menu-btn">返回菜单</button>
+    <button class="btn small gold" id="over-hall-btn">🏠 恭夫游戏大厅</button>
+    <div id="net-restart-hint" class="hidden" style="font-size:12px; color:#8899aa">等待房主重新开局...</div>
+  </div>
+
+  <!-- ===== 协商对话框 (悔棋/求和/认输共用) ===== -->
+  <div id="undo-ask" class="screen hidden" style="z-index:20; background:rgba(5,5,12,0.9)">
+    <div id="ask-title" style="font-size:24px; font-weight:bold; color:#ffd700; letter-spacing:6px; text-shadow:0 0 16px #ffd70088">悔 棋 申 请</div>
+    <div id="undo-ask-text" style="color:#ffffff; font-size:15px; line-height:1.9; max-width:340px; white-space:pre-line"></div>
+    <button class="btn" id="undo-yes-btn">同 意</button>
+    <button class="btn small gray" id="undo-no-btn">拒 绝</button>
+    <button class="btn small cyan hidden" id="undo-close-btn">关 闭</button>
+  </div>
+
+  <!-- ===== 棋谱回放控制栏 ===== -->
+  <div id="replay-bar" class="hidden">
+    <button id="rp-first" title="回到开局">⏮</button>
+    <button id="rp-prev" title="上一步">◀</button>
+    <div id="rp-info"><div id="rp-step">0 / 0</div><div id="rp-text">—</div></div>
+    <button id="rp-next" title="下一步">▶</button>
+    <button id="rp-last" title="跳到终局">⏭</button>
+    <button id="rp-auto">▶ 自动</button>
+    <button id="rp-exit">✕ 退出</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ============================================================
+// 象棋恭夫 - 专业街机中国象棋
+// 完整规则引擎 / alpha-beta AI / PeerJS 联机 / WebAudio 音效
+// 棋盘: 9列(x0..8) x 10行(y0..9), 黑上红下, 红先行
+// 棋子编码: 2字符字符串 'rK'/'bP' 等 (side+type), 格子为 null 或字符串
+// ============================================================
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+
+let W = 0, H = 0, DPR = 1;
+let cell = 30, bx = 0, by = 0, bw = 0, bh = 0;
+const PAD_TOP = 58, PAD_BOT = 104;      // 棋盘上下预留 (HUD 三行/两行)
+let SAFE_T = 0, SAFE_B = 0;             // 刘海屏/手势条安全区
+
+// 探测 env(safe-area-inset-*) 实际像素值 (供 canvas HUD 与棋盘布局使用)
+function detectSafe() {
+  try {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:0;right:0;top:env(safe-area-inset-top);bottom:env(safe-area-inset-bottom);visibility:hidden;pointer-events:none';
+    document.body.appendChild(el);
+    SAFE_T = Math.max(0, el.offsetTop);
+    SAFE_B = Math.max(0, window.innerHeight - el.offsetTop - el.offsetHeight);
+    el.remove();
+  } catch (e) { SAFE_T = 0; SAFE_B = 0; }
+}
+
+function resize() {
+  detectSafe();
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = W * DPR; cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const availW = W - 20, availH = H - (PAD_TOP + SAFE_T) - (PAD_BOT + SAFE_B);
+  cell = Math.max(13, Math.floor(Math.min(availW / 8.7, availH / 9.7)));
+  bw = cell * 8; bh = cell * 9;
+  bx = (W - bw) / 2;
+  by = PAD_TOP + SAFE_T + (availH - bh) / 2;
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+
+// ============ 音效引擎 ============
+let audioCtx = null;
+let soundOn = true;
+try { soundOn = localStorage.getItem('xqGongfuSound') !== '0'; } catch (e) {}
+
+function ensureAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+function tone(freq, dur, type, vol, slideTo) {
+  if (!audioCtx || !soundOn) return;
+  const t0 = audioCtx.currentTime;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type || 'square';
+  o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(30, slideTo), t0 + dur);
+  g.gain.setValueAtTime(vol || 0.12, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(t0); o.stop(t0 + dur + 0.02);
+}
+function noise(dur, vol, filterFreq) {
+  if (!audioCtx || !soundOn) return;
+  const t0 = audioCtx.currentTime;
+  const len = Math.floor(audioCtx.sampleRate * dur);
+  const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = audioCtx.createBufferSource(); src.buffer = buf;
+  const f = audioCtx.createBiquadFilter(); f.type = 'lowpass';
+  f.frequency.value = filterFreq || 1200;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(vol || 0.14, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+  src.start(t0);
+}
+const SFX = {
+  select()  { tone(650, 0.05, 'square', 0.08, 820); },
+  move()    { tone(220, 0.06, 'triangle', 0.16, 160); noise(0.05, 0.08, 2400); },
+  cap()     { tone(140, 0.1, 'sawtooth', 0.18, 70); noise(0.12, 0.16, 1500); },
+  check()   { tone(880, 0.09, 'square', 0.14); setTimeout(() => tone(660, 0.12, 'square', 0.14), 100); },
+  mate()    { noise(0.4, 0.22, 800); tone(85, 0.45, 'sawtooth', 0.22, 38);
+              setTimeout(() => tone(1100, 0.1, 'square', 0.13), 130);
+              setTimeout(() => tone(1650, 0.16, 'triangle', 0.12), 260); },
+  win()     { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.14, 'triangle', 0.15), i * 110)); },
+  lose()    { [400, 320, 240, 150].forEach((f, i) => setTimeout(() => tone(f, 0.18, 'sawtooth', 0.13), i * 130)); },
+  draw()    { [440, 440].forEach((f, i) => setTimeout(() => tone(f, 0.14, 'square', 0.1), i * 180)); },
+  click()   { tone(700, 0.05, 'square', 0.09, 900); },
+  go()      { tone(523, 0.1, 'square', 0.13); setTimeout(() => tone(784, 0.16, 'square', 0.13), 110); },
+  netErr()  { tone(200, 0.18, 'sawtooth', 0.13, 120); },
+  // 悔棋/回退: 三连下滑音模拟"倒带"感
+  undo()    { tone(620, 0.08, 'square', 0.13, 400); setTimeout(() => tone(430, 0.08, 'square', 0.12, 270), 70);
+              setTimeout(() => tone(290, 0.12, 'triangle', 0.13, 170), 140); noise(0.09, 0.05, 1600); },
+  // 悔棋申请被拒: 低频双降警示
+  undoNo()  { tone(300, 0.12, 'sawtooth', 0.13, 190); setTimeout(() => tone(170, 0.16, 'sawtooth', 0.11, 110), 110); },
+};
+
+// ============ 规则引擎 ============
+const OPP = { r: 'b', b: 'r' };
+const VAL = { K: 10000, R: 900, N: 430, C: 460, A: 210, B: 210, P: 100 };
+const CHAR = { r: { K: '帥', A: '仕', B: '相', N: '馬', R: '車', C: '炮', P: '兵' },
+               b: { K: '將', A: '士', B: '象', N: '馬', R: '車', C: '砲', P: '卒' } };
+const CN_NUM = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+
+function initBoard() {
+  const b = Array.from({ length: 10 }, () => Array(9).fill(null));
+  const back = ['R', 'N', 'B', 'A', 'K', 'A', 'B', 'N', 'R'];
+  back.forEach((t, x) => { b[0][x] = 'b' + t; b[9][x] = 'r' + t; });
+  [1, 7].forEach(x => { b[2][x] = 'bC'; b[7][x] = 'rC'; });
+  [0, 2, 4, 6, 8].forEach(x => { b[3][x] = 'bP'; b[6][x] = 'rP'; });
+  return b;
+}
+function cloneBoard(b) { return b.map(r => r.slice()); }
+function inBoard(x, y) { return x >= 0 && x <= 8 && y >= 0 && y <= 9; }
+function inPalace(x, y, side) {
+  if (x < 3 || x > 5) return false;
+  return side === 'r' ? (y >= 7 && y <= 9) : (y >= 0 && y <= 2);
+}
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const KN8 = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+const DIAG4 = [[-2, -2], [-2, 2], [2, -2], [2, 2]];
+const DIAG1 = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+function pseudoMoves(b, side) {
+  const list = [];
+  const push = (fx, fy, tx, ty) => {
+    if (!inBoard(tx, ty)) return;
+    const p = b[ty][tx];
+    if (!p || p[0] !== side) list.push({ fx: fx, fy: fy, tx: tx, ty: ty });
+  };
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 9; x++) {
+    const pc = b[y][x];
+    if (!pc || pc[0] !== side) continue;
+    const t = pc[1];
+    if (t === 'R') {
+      for (const [dx, dy] of DIRS) {
+        let cx = x + dx, cy = y + dy;
+        while (inBoard(cx, cy)) {
+          const p = b[cy][cx];
+          if (!p) { list.push({ fx: x, fy: y, tx: cx, ty: cy }); }
+          else { if (p[0] !== side) list.push({ fx: x, fy: y, tx: cx, ty: cy }); break; }
+          cx += dx; cy += dy;
+        }
+      }
+    } else if (t === 'C') {
+      for (const [dx, dy] of DIRS) {
+        let cx = x + dx, cy = y + dy, jumped = false;
+        while (inBoard(cx, cy)) {
+          const p = b[cy][cx];
+          if (!jumped) {
+            if (!p) list.push({ fx: x, fy: y, tx: cx, ty: cy });
+            else jumped = true;
+          } else if (p) {
+            if (p[0] !== side) list.push({ fx: x, fy: y, tx: cx, ty: cy });
+            break;
+          }
+          cx += dx; cy += dy;
+        }
+      }
+    } else if (t === 'N') {
+      for (const [dx, dy] of KN8) {
+        const lx = Math.abs(dx) === 2 ? x + dx / 2 : x;
+        const ly = Math.abs(dy) === 2 ? y + dy / 2 : y;
+        if (inBoard(lx, ly) && !b[ly][lx]) push(x, y, x + dx, y + dy);
+      }
+    } else if (t === 'B') {
+      for (const [dx, dy] of DIAG4) {
+        const ex = x + dx / 2, ey = y + dy / 2;
+        const tx = x + dx, ty = y + dy;
+        if (!inBoard(tx, ty)) continue;
+        if (side === 'r' ? ty < 5 : ty > 4) continue;       // 不过河
+        if (inBoard(ex, ey) && !b[ey][ex]) push(x, y, tx, ty);
+      }
+    } else if (t === 'A') {
+      for (const [dx, dy] of DIAG1) {
+        const tx = x + dx, ty = y + dy;
+        if (inPalace(tx, ty, side)) push(x, y, tx, ty);
+      }
+    } else if (t === 'K') {
+      for (const [dx, dy] of DIRS) {
+        const tx = x + dx, ty = y + dy;
+        if (inPalace(tx, ty, side)) push(x, y, tx, ty);
+      }
+    } else if (t === 'P') {
+      const fwd = side === 'r' ? -1 : 1;
+      push(x, y, x, y + fwd);
+      const crossed = side === 'r' ? y <= 4 : y >= 5;
+      if (crossed) { push(x, y, x - 1, y); push(x, y, x + 1, y); }
+    }
+  }
+  return list;
+}
+
+function kingPos(b, side) {
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 9; x++) {
+    const p = b[y][x];
+    if (p && p[0] === side && p[1] === 'K') return { x: x, y: y };
+  }
+  return null;
+}
+
+function attacked(b, x, y, by) {
+  // 车 / 炮
+  for (const [dx, dy] of DIRS) {
+    let cx = x + dx, cy = y + dy, jumped = false;
+    while (inBoard(cx, cy)) {
+      const p = b[cy][cx];
+      if (p) {
+        if (!jumped) { if (p[0] === by && p[1] === 'R') return true; jumped = true; }
+        else { if (p[0] === by && p[1] === 'C') return true; break; }
+      }
+      cx += dx; cy += dy;
+    }
+  }
+  // 马 (反向蹩腿检查)
+  for (const [dx, dy] of KN8) {
+    const kx = x + dx, ky = y + dy;
+    if (!inBoard(kx, ky)) continue;
+    const p = b[ky][kx];
+    if (p && p[0] === by && p[1] === 'N') {
+      const lx = Math.abs(x - kx) === 2 ? kx + (x - kx) / 2 : kx;
+      const ly = Math.abs(y - ky) === 2 ? ky + (y - ky) / 2 : ky;
+      if (!b[ly][lx]) return true;
+    }
+  }
+  // 兵
+  if (by === 'r') {
+    if (inBoard(x, y + 1)) { const p = b[y + 1][x]; if (p === 'rP') return true; }
+    if (y <= 4) {
+      for (const dx of [-1, 1]) if (inBoard(x + dx, y) && b[y][x + dx] === 'rP') return true;
+    }
+  } else {
+    if (inBoard(x, y - 1)) { const p = b[y - 1][x]; if (p === 'bP') return true; }
+    if (y >= 5) {
+      for (const dx of [-1, 1]) if (inBoard(x + dx, y) && b[y][x + dx] === 'bP') return true;
+    }
+  }
+  return false;
+}
+
+function inCheck(b, side) {
+  const kp = kingPos(b, side);
+  if (!kp) return true;
+  if (attacked(b, kp.x, kp.y, OPP[side])) return true;
+  // 将帅照面
+  const ek = kingPos(b, OPP[side]);
+  if (ek && ek.x === kp.x) {
+    let blocked = false;
+    for (let y = Math.min(kp.y, ek.y) + 1; y < Math.max(kp.y, ek.y); y++) {
+      if (b[y][kp.x]) { blocked = true; break; }
+    }
+    if (!blocked) return true;
+  }
+  return false;
+}
+
+function legalMoves(b, side) {
+  const out = [];
+  for (const m of pseudoMoves(b, side)) {
+    const p = b[m.ty][m.tx];
+    b[m.ty][m.tx] = b[m.fy][m.fx]; b[m.fy][m.fx] = null;
+    if (!inCheck(b, side)) out.push(m);
+    b[m.fy][m.fx] = b[m.ty][m.tx]; b[m.ty][m.tx] = p;
+  }
+  return out;
+}
+
+function hashOf(b, turn) {
+  let s = turn;
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 9; x++) {
+    const p = b[y][x];
+    s += p ? (p[0] === 'r' ? p[1] : p[1].toLowerCase()) : '.';
+  }
+  return s;
+}
+
+// 中文着法记谱 (如 炮二平五 / 馬8进7)
+function fileNum(x, side) { return side === 'r' ? 9 - x : x + 1; }
+function moveText(pc, m) {
+  const side = pc[0], t = pc[1];
+  const name = CHAR[side][t];
+  const fFrom = fileNum(m.fx, side), fTo = fileNum(m.tx, side);
+  // 红方用汉字数字, 黑方用阿拉伯数字 (标准记谱惯例)
+  const num = (n) => side === 'r' ? CN_NUM[n - 1] : String(n);
+  if (m.fy === m.ty) return name + num(fFrom) + '平' + num(fTo);
+  const forward = side === 'r' ? (m.ty < m.fy) : (m.ty > m.fy);
+  const dir = forward ? '进' : '退';
+  if (m.fx === m.tx) return name + num(fFrom) + dir + num(Math.abs(m.ty - m.fy));
+  return name + num(fFrom) + dir + num(fTo);
+}
+
+// 三次重复局面裁决: 若从局面首次出现起, 某一方每次行棋都在将军 (长将) → 长将方判负
+// hashList[i] = 第 i 步后的局面哈希; checkLog[k] = [第 k+1 步行棋方, 该步是否将军]
+function repetitionVerdict(hashList, checkLog, h) {
+  let count = 0, i0 = -1;
+  for (let i = 0; i < hashList.length; i++) {
+    if (hashList[i] === h) { count++; if (i0 < 0) i0 = i; }
+  }
+  if (count < 3 || i0 < 0) return { draw: true, reason: '三次重复局面' };
+  const cyc = checkLog.slice(i0);          // 首次出现到当前之间的全部着法
+  if (cyc.length < 2) return { draw: true, reason: '三次重复局面' };
+  const stat = { r: [0, 0], b: [0, 0] };   // [将军步数, 总步数]
+  for (const mv of cyc) {
+    if (!mv || !stat[mv[0]]) return { draw: true, reason: '三次重复局面' };
+    stat[mv[0]][1]++;
+    if (mv[1]) stat[mv[0]][0]++;
+  }
+  for (const s of ['r', 'b']) {
+    const allCheck = stat[s][1] > 0 && stat[s][0] === stat[s][1];
+    if (!allCheck) continue;               // 该方存在非将军着法 → 不是长将
+    const o = s === 'r' ? 'b' : 'r';
+    const oppAllCheck = stat[o][1] > 0 && stat[o][0] === stat[o][1];
+    if (!oppAllCheck) {
+      return { draw: false, loser: s, reason: (s === 'r' ? '红方' : '黑方') + '长将判负! 单方连续将军不许' };
+    }
+  }
+  return { draw: true, reason: '三次重复局面' };
+}
+
+// ============ AI (PVS + 置换表 + 空着剪枝 + LMR + 杀手/历史启发 + 迭代加深) ============
+const MATE = 30000;
+const LEVELS = {
+  easy:   { depth: 2,  time: 320,  noise: 150 },
+  normal: { depth: 6,  time: 1000, noise: 30 },
+  hard:   { depth: 12, time: 2800, noise: 0 },   // 大师: 深度迭代 + 全部专业剪枝增强
+};
+// ===== 全子力位置价值表 (红方视角, 黑方镜像 9-y) =====
+const PST = {
+  P: [[0,3,6,9,12,9,6,3,0],[18,36,56,80,120,80,56,36,18],[14,26,42,60,80,60,42,26,14],
+      [10,20,30,34,40,34,30,20,10],[6,12,18,18,20,18,18,12,6],[2,0,8,0,8,0,8,0,2],
+      [0,0,-2,0,4,0,-2,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0]],
+  R: [[14,14,12,18,16,18,12,14,14],[16,20,18,24,26,24,18,20,16],[12,12,12,18,18,18,12,12,12],
+      [12,18,16,22,22,22,16,18,12],[12,14,12,18,18,18,12,14,12],[12,16,14,20,20,20,14,16,12],
+      [6,10,8,14,14,14,8,10,6],[4,8,6,14,12,14,6,8,4],[8,4,8,16,8,16,8,4,8],[-2,10,6,14,12,14,6,10,-2]],
+  N: [[4,8,16,12,4,12,16,8,4],[4,10,28,16,8,16,28,10,4],[12,14,16,20,18,20,16,14,12],
+      [8,24,18,24,20,24,18,24,8],[6,16,14,18,16,18,14,16,6],[4,12,16,14,12,14,16,12,4],
+      [2,6,8,6,10,6,8,6,2],[4,2,8,8,4,8,8,2,4],[0,2,4,4,-2,4,4,2,0],[0,-4,0,0,0,0,0,-4,0]],
+  C: [[6,4,0,-10,-12,-10,0,4,6],[2,2,0,-4,-14,-4,0,2,2],[2,2,0,-10,-8,-10,0,2,2],
+      [0,0,-2,4,10,4,-2,0,0],[0,0,0,2,8,2,0,0,0],[-2,0,4,2,6,2,4,0,-2],
+      [0,0,0,2,4,2,0,0,0],[4,0,8,6,10,6,8,0,4],[0,2,4,6,6,6,4,2,0],[0,0,2,6,6,6,2,0,0]],
+  A: [[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,8,0,8,0,0,0],
+      [0,0,0,0,14,0,0,0,0],[0,0,0,10,6,10,0,0,0]],
+  B: [[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0],[0,0,2,0,0,0,2,0,0],[0,0,0,0,0,0,0,0,0],[6,0,0,0,12,0,0,0,6],
+      [0,0,0,0,0,0,0,0,0],[0,0,10,0,0,0,10,0,0]],
+  K: [[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0,0],[0,0,0,0,2,0,0,0,0],
+      [0,0,0,0,10,0,0,0,0],[0,0,0,4,14,4,0,0,0]],
+};
+let nodes = 0, deadline = 0, aborted = false;
+// ===== Zobrist 增量哈希 + 置换表 (首次调用 bestMove 时惰性初始化) =====
+let Z_HI = null, Z_LO = null, Z_SIDE = 0, TT = null, killers = null, histTbl = null;
+let zHi = 0, zLo = 0;
+function initAI() {
+  if (TT) return;
+  const rnd = () => (Math.random() * 0x100000000) | 0;
+  Z_HI = {}; Z_LO = {};
+  for (const s of ['r', 'b']) for (const t of ['K', 'R', 'N', 'C', 'A', 'B', 'P']) {
+    const k = s + t, hi = new Int32Array(90), lo = new Int32Array(90);
+    for (let i = 0; i < 90; i++) { hi[i] = rnd(); lo[i] = rnd(); }
+    Z_HI[k] = hi; Z_LO[k] = lo;
+  }
+  Z_SIDE = rnd();
+  const SZ = 1 << 18;   // 26 万条目, 约 3MB
+  TT = { mask: SZ - 1, key: new Int32Array(SZ), score: new Int32Array(SZ),
+         depth: new Int8Array(SZ), flag: new Int8Array(SZ), mv: new Int32Array(SZ) };
+  killers = [];
+  for (let i = 0; i < 128; i++) killers.push([0, 0]);
+  histTbl = new Int32Array(2 * 90 * 90);
+}
+function initZob(b) {
+  zHi = 0; zLo = 0;
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 9; x++) {
+    const p = b[y][x];
+    if (p) { const i = y * 9 + x; zHi ^= Z_HI[p][i]; zLo ^= Z_LO[p][i]; }
+  }
+}
+function xorsq(pc, x, y) { const i = y * 9 + x; zHi ^= Z_HI[pc][i]; zLo ^= Z_LO[pc][i]; }
+function encMove(m) { return ((m.fy * 10 + m.fx) * 10 + m.ty) * 10 + m.tx; }
+function hasRCN(b, side) {
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 9; x++) {
+    const p = b[y][x];
+    if (p && p[0] === side && (p[1] === 'R' || p[1] === 'N' || p[1] === 'C')) return true;
+  }
+  return false;
+}
+
+function evalBoard(b) {
+  let s = 0, rMat = 0, bMat = 0, rP = 0, bP = 0;
+  let rAdv = 0, bAdv = 0, rEle = 0, bEle = 0, rKx = -1, rKy = -1, bKx = -1, bKy = -1;
+  const pfR = PF_R, pfB = PF_B;   // 复用 scratch 数组, 避免热路径 GC
+  pfR.fill(0); pfB.fill(0);
+  let rkN = 0;
+  const rk = RK_SCRATCH;
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 9; x++) {
+    const p = b[y][x];
+    if (!p) continue;
+    const t = p[1], red = p[0] === 'r';
+    const yy = red ? y : 9 - y;
+    const v = VAL[t] + PST[t][yy][x];
+    s += red ? v : -v;
+    if (t === 'P') { if (red) { rP++; pfR[x]++; } else { bP++; pfB[x]++; } }
+    else if (t === 'K') { if (red) { rKx = x; rKy = y; } else { bKx = x; bKy = y; } }
+    else {
+      if (red) rMat += VAL[t]; else bMat += VAL[t];
+      if (t === 'A') { if (red) rAdv++; else bAdv++; }
+      else if (t === 'B') { if (red) rEle++; else bEle++; }
+      else if (t === 'R' && rkN < 4) { rk[rkN * 3] = x; rk[rkN * 3 + 1] = y; rk[rkN * 3 + 2] = red ? 1 : 0; rkN++; }
+    }
+  }
+  // 城防完整度: 士象双全更稳
+  s += (rAdv * 5 + rEle * 5) - (bAdv * 5 + bEle * 5);
+  // 车占开放线 (本线无己方兵)
+  for (let i = 0; i < rkN; i++) {
+    const x = rk[i * 3], red = rk[i * 3 + 2] === 1;
+    const own = red ? pfR[x] : pfB[x];
+    const bonus = own === 0 ? 12 : (own === 1 ? 5 : 0);
+    s += red ? bonus : -bonus;
+  }
+  // 残局 (双方强子总价值低): 兵增值 + 御驾亲征
+  if (rMat + bMat < 2000) {
+    s += (rP - bP) * 22;
+    if (rKx >= 0) s += (9 - rKy) * 3 - Math.abs(rKx - 4) * 2;
+    if (bKx >= 0) s -= bKy * 3 - Math.abs(bKx - 4) * 2;
+  }
+  return s;
+}
+const PF_R = new Int8Array(9), PF_B = new Int8Array(9), RK_SCRATCH = new Int8Array(12);
+function applyM(b, m) {
+  const pc = b[m.fy][m.fx], c = b[m.ty][m.tx];
+  b[m.ty][m.tx] = pc; b[m.fy][m.fx] = null;
+  xorsq(pc, m.fx, m.fy);
+  if (c) xorsq(c, m.tx, m.ty);
+  xorsq(pc, m.tx, m.ty);
+  return c;
+}
+function undoM(b, m, c) {
+  const pc = b[m.ty][m.tx];
+  b[m.fy][m.fx] = pc; b[m.ty][m.tx] = c;
+  xorsq(pc, m.tx, m.ty);
+  if (c) xorsq(c, m.tx, m.ty);
+  xorsq(pc, m.fx, m.fy);
+}
+
+// 着法排序: 置换表着 > 吃子(MVV/LVA) > 杀手着 > 历史启发 + 位置价值提示
+function orderMoves(b, moves, ttEnc, ply, side) {
+  const kl = killers[ply] || [0, 0];
+  const base = side === 'r' ? 0 : 8100;
+  for (const m of moves) {
+    const cap = b[m.ty][m.tx];
+    const pc = b[m.fy][m.fx];
+    const e = encMove(m);
+    if (e === ttEnc) m.s = 2e7;
+    else if (cap) m.s = 1e7 + VAL[cap[1]] * 10 - VAL[pc[1]];
+    else if (e === kl[0] || e === kl[1]) m.s = 9e6;
+    else {
+      const t = pc[1], red = pc[0] === 'r';
+      const hint = PST[t][red ? m.ty : 9 - m.ty][m.tx] - PST[t][red ? m.fy : 9 - m.fy][m.fx];
+      m.s = Math.min(histTbl[base + (m.fy * 9 + m.fx) * 90 + (m.ty * 9 + m.tx)], 8e6) + hint;
+    }
+  }
+  moves.sort((a, c) => c.s - a.s);
+}
+
+function quiesce(b, side, alpha, beta, ply) {
+  nodes++;
+  if ((nodes & 1023) === 0 && Date.now() > deadline) aborted = true;
+  if (aborted) return 0;
+  const stand = side === 'r' ? evalBoard(b) : -evalBoard(b);
+  if (stand >= beta) return stand;
+  if (stand > alpha) alpha = stand;
+  const caps = pseudoMoves(b, side).filter(m => b[m.ty][m.tx]);
+  orderMoves(b, caps, 0, ply, side);
+  for (const m of caps) {
+    const c = applyM(b, m);
+    if (inCheck(b, side)) { undoM(b, m, c); continue; }
+    const v = -quiesce(b, OPP[side], -beta, -alpha, ply + 1);
+    undoM(b, m, c);
+    if (aborted) return 0;
+    if (v >= beta) return v;
+    if (v > alpha) alpha = v;
+  }
+  return alpha;
+}
+
+function search(b, side, depth, alpha, beta, ply, allowNull) {
+  if (aborted) return 0;
+  nodes++;
+  if ((nodes & 1023) === 0 && Date.now() > deadline) aborted = true;
+  if (aborted) return 0;
+  // 杀棋距离剪枝: 本节点最快的杀/被杀距离受 ply 约束, 窗口外直接截断
+  if (alpha < -(MATE - ply)) alpha = -(MATE - ply);
+  if (beta > MATE - ply - 1) beta = MATE - ply - 1;
+  if (alpha >= beta) return alpha;
+  if (depth <= 0) return quiesce(b, side, alpha, beta, ply);
+
+  // ===== 置换表探测 (行棋方混入校验键, 深度足够时按三态标志直接截断) =====
+  const kHi = side === 'r' ? zHi : (zHi ^ Z_SIDE);
+  const idx = zLo & TT.mask;
+  let ttEnc = 0;
+  if (TT.key[idx] === kHi && TT.depth[idx] > 0) {
+    ttEnc = TT.mv[idx];
+    if (TT.depth[idx] >= depth) {
+      let s = TT.score[idx];
+      if (s > MATE - 1000) s -= ply;
+      else if (s < -(MATE - 1000)) s += ply;
+      const fl = TT.flag[idx];
+      if (fl === 0) return s;                 // 精确值
+      if (fl === 1 && s >= beta) return s;    // 下界 ≥ β → 剪枝
+      if (fl === 2 && s <= alpha) return s;   // 上界 ≤ α → 剪枝
+    }
+  }
+
+  const checked = inCheck(b, side);
+  if (checked && ply < 32) depth++;           // 将军延伸: 跨越水平线效应
+
+  // ===== 空着剪枝 (己方有车马炮且未被将军, 让一手仍 ≥ β 则剪) =====
+  if (allowNull && !checked && depth >= 3 && beta < MATE - 1000 && hasRCN(b, side)) {
+    const R = 2 + (depth >> 2);
+    const v = -search(b, OPP[side], depth - 1 - R, -beta, -beta + 1, ply + 1, false);
+    if (aborted) return 0;
+    if (v >= beta) return beta;
+  }
+
+  const moves = pseudoMoves(b, side);
+  orderMoves(b, moves, ttEnc, ply, side);
+  let any = false, best = -Infinity, bestEnc = 0;
+  const oldAlpha = alpha;
+  let i = 0;
+  for (const m of moves) {
+    const c = applyM(b, m);
+    if (inCheck(b, side)) { undoM(b, m, c); continue; }
+    any = true; i++;
+    let v;
+    if (i === 1) {
+      v = -search(b, OPP[side], depth - 1, -beta, -alpha, ply + 1, true);
+    } else {
+      // PVS 零窗口 + LMR: 排序靠后的安静着法先缩减一层试探, 升剪才全深度重搜
+      const red = (!c && !checked && depth >= 3 && i > 4) ? 1 : 0;
+      v = -search(b, OPP[side], depth - 1 - red, -alpha - 1, -alpha, ply + 1, true);
+      if (v > alpha && v < beta)
+        v = -search(b, OPP[side], depth - 1, -beta, -alpha, ply + 1, true);
+    }
+    undoM(b, m, c);
+    if (aborted) return 0;
+    if (v > best) { best = v; bestEnc = encMove(m); }
+    if (v > alpha) alpha = v;
+    if (alpha >= beta) {
+      if (!c) {   // β 截断时更新杀手着法与历史启发表
+        const kl = killers[ply];
+        if (kl) { if (kl[0] !== bestEnc) { kl[1] = kl[0]; kl[0] = bestEnc; } }
+        const hI = (side === 'r' ? 0 : 8100) + (m.fy * 9 + m.fx) * 90 + (m.ty * 9 + m.tx);
+        histTbl[hI] += depth * depth;
+        if (histTbl[hI] > 6000000) for (let k = 0; k < histTbl.length; k++) histTbl[k] >>= 1;
+      }
+      break;
+    }
+  }
+  if (!any) return -(MATE - ply);   // 绝杀或困毙 → 行棋方输
+
+  // ===== 置换表存储 (杀棋分按 ply 相对化后入库) =====
+  let sStore = best;
+  if (sStore > MATE - 1000) sStore += ply;
+  else if (sStore < -(MATE - 1000)) sStore -= ply;
+  TT.key[idx] = kHi; TT.score[idx] = sStore;
+  TT.depth[idx] = depth; TT.mv[idx] = bestEnc;
+  TT.flag[idx] = best >= beta ? 1 : (best > oldAlpha ? 0 : 2);
+  return best;
+}
+
+function bestMove(b, side, level) {
+  const conf = LEVELS[level] || LEVELS.normal;
+  initAI();          // 惰性初始化 Zobrist / 置换表 / 杀手表 (跨步保留 TT)
+  initZob(b);        // 重算当前局面的增量哈希基准
+  killers.forEach(kl => { kl[0] = 0; kl[1] = 0; });
+  histTbl.fill(0);
+  const root = legalMoves(b, side);
+  if (!root.length) return null;
+  if (root.length === 1) return root[0];
+  nodes = 0; aborted = false;
+  deadline = Date.now() + conf.time;
+  // 根节点沿用置换表着法优先 (上一步/上一轮迭代的最佳线)
+  const kHi = side === 'r' ? zHi : (zHi ^ Z_SIDE);
+  const idx = zLo & TT.mask;
+  let ttEnc = (TT.key[idx] === kHi && TT.depth[idx] > 0) ? TT.mv[idx] : 0;
+  let best = root[0];
+  for (let d = 1; d <= conf.depth; d++) {
+    let alpha = -Infinity, bd = -Infinity, bm = null;
+    orderMoves(b, root, ttEnc, 0, side);
+    for (const m of root) {
+      const c = applyM(b, m);
+      let v;
+      if (bm === null) v = -search(b, OPP[side], d - 1, -Infinity, -alpha, 1, true);
+      else {
+        // 根节点 PVS: 零窗口试探, 升剪才开全窗口
+        v = -search(b, OPP[side], d - 1, -alpha - 1, -alpha, 1, true);
+        if (v > alpha) v = -search(b, OPP[side], d - 1, -Infinity, -alpha, 1, true);
+      }
+      undoM(b, m, c);
+      if (aborted) break;
+      // 噪声只作用于普通局面分; fail-soft 边界可能返回 MATE 级上/下界, 加噪会污染杀棋判定
+      if (conf.noise > 0 && v > -(MATE - 1000) && v < MATE - 1000)
+        v += (Math.random() - 0.5) * conf.noise;
+      if (v > bd) { bd = v; bm = m; }
+      if (v > alpha) alpha = v;
+    }
+    if (!aborted && bm) { best = bm; ttEnc = encMove(bm); }
+    if (aborted || bd >= MATE - 1000) break;   // 已发现必杀 → 无需更深
+  }
+  return best;
+}
+
+// ============ 开局库 (AI 前几手走常见应着, 对局更多样更拟人) ============
+function pickBook(list, legal) {
+  const ok = [];
+  for (const q of list) {
+    const m = legal.find(x => x.fx === q[0] && x.fy === q[1] && x.tx === q[2] && x.ty === q[3]);
+    if (m) ok.push(m);
+  }
+  return ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
+}
+function bookMove(b, legal, side) {
+  const n = G ? G.moveN : 0;
+  if (n > 5) return null;
+  if (side === 'b') {
+    if (n === 1) {
+      // 黑方第一手: 屏风马 / 飞象 / 进卒, 红方中炮时还可顺炮
+      const cands = [
+        [1, 0, 2, 2],   // 马8进7 (屏风马)
+        [7, 0, 6, 2],   // 马2进3 (屏风马)
+        [2, 0, 4, 2],   // 象7进5
+        [6, 0, 4, 2],   // 象3进5
+        [6, 3, 6, 4],   // 卒3进1
+        [2, 3, 2, 4],   // 卒7进1
+      ];
+      if (b[7][4] === 'rC') cands.push([1, 2, 4, 2]);   // 炮8平5 (顺炮应中炮)
+      return pickBook(cands, legal);
+    }
+    if (n === 3 && Math.random() < 0.8) {
+      // 黑方第二手: 补全屏风马 / 顺炮跳正马
+      if (b[2][2] === 'bN' && b[0][7] === 'bN') return pickBook([[7, 0, 6, 2]], legal);
+      if (b[2][6] === 'bN' && b[0][1] === 'bN') return pickBook([[1, 0, 2, 2]], legal);
+      if (b[2][4] === 'bC' && b[0][1] === 'bN') return pickBook([[1, 0, 2, 2]], legal);
+    }
+  } else if (n === 0) {
+    // AI 执红第一手: 中炮 / 跳马 / 飞相 / 仙人指路
+    return pickBook([
+      [7, 7, 4, 7],   // 炮二平五 (中炮)
+      [1, 7, 4, 7],   // 炮八平五
+      [7, 9, 6, 7],   // 马二进三
+      [1, 9, 2, 7],   // 马八进七
+      [6, 9, 4, 7],   // 相七进五
+      [2, 9, 4, 7],   // 相三进五
+      [6, 6, 6, 5],   // 兵七进一 (仙人指路)
+      [2, 6, 2, 5],   // 兵三进一
+    ], legal);
+  }
+  return null;
+}
+
+// AI 行棋调度: 先查开局库, 再深度搜索; 超时期间悔棋/认输可打断
+function scheduleAI() {
+  if (!G || G.mode !== 'ai' || !G.ai || G.aiBusy) return;   // 防重入: 已有思考调度
+  G.aiBusy = true;
+  G.aiBusyAt = Date.now();    // 思考动画计时起点
+  const step = () => {
+    if (!G || G.status !== 'playing' || G.mode !== 'ai' || !G.ai) { if (G) G.aiBusy = false; return; }
+    if (paused) { setTimeout(step, 200); return; }          // 暂停中: 冻结思考, 恢复后继续
+    if (G.turn !== G.ai.side) { G.aiBusy = false; return; }
+    let mv = null;
+    try { mv = bookMove(G.board, G.legal, G.ai.side); } catch (e) { mv = null; }
+    if (!mv) mv = bestMove(G.board, G.ai.side, G.ai.level);
+    G.aiBusy = false;
+    if (mv) doMove(mv);
+  };
+  setTimeout(step, 320);
+}
+
+// ============ 对局状态 ============
+let G = null;
+let paused = false;        // 暂停中: 棋钟冻结, AI 暂不行棋
+let gameState = 'menu';   // menu | playing | over | replay
+let mode = 'ai';          // ai | local | online
+
+function newGame(m, opts) {
+  mode = m;
+  opts = opts || {};
+  const aiSide = m === 'ai' ? OPP[opts.mySide || 'r'] : null;   // AI 执子方 (默认玩家执红)
+  G = {
+    mode: m,
+    board: initBoard(),
+    turn: 'r',
+    status: 'playing',
+    endReason: '',
+    sel: null,
+    legal: legalMoves(initBoard(), 'r'),
+    last: null,
+    lastText: '',
+    moveN: 0,
+    noCapHalf: 0,
+    hashes: {},
+    hashList: [],
+    checkLog: [],
+    clock: { r: 600000, b: 600000 },
+    caps: { r: [], b: [] },
+    history: [],
+    replayTexts: [],       // 每步着法中文文本 (棋谱回放)
+    ai: m === 'ai' ? { level: opts.level || 'normal', side: aiSide } : null,
+    aiBusy: false,
+    aiBusyAt: 0,
+    anim: null,
+    checkSide: null,
+    flip: (m === 'ai' && aiSide === 'r') || (m === 'online' && net.mySide === 'b'),
+    names: { r: '红方', b: '黑方' },
+    particles: [],
+    floats: [],
+    shake: 0, flash: 0,
+  };
+  const h = hashOf(G.board, 'r');
+  G.hashes[h] = 1; G.hashList.push(h);
+  if (m === 'ai') {
+    const me = OPP[G.ai.side];   // 玩家执子方
+    G.names[me] = '你';
+    G.names[G.ai.side] = '恭夫AI·' + ({ easy: '初学', normal: '进阶', hard: '大师' })[G.ai.level];
+  } else if (m === 'local') {
+    G.names.r = '红方'; G.names.b = '黑方';
+  } else if (m === 'online') {
+    G.names.r = net.mySide === 'r' ? net.myName : net.oppName;
+    G.names.b = net.mySide === 'b' ? net.myName : net.oppName;
+  }
+  gameState = 'playing';
+  paused = false;
+  hideAllScreens();
+  hideUndoAsk();
+  undoAsked = false;
+  drawAsked = false;
+  stopReplayAuto();
+  $('replay-bar').classList.add('hidden');
+  $('ib-menu').classList.remove('hidden'); $('ib-menu').style.display = '';
+  tryAutoFullscreen();
+  SFX.go();
+  if (m === 'ai' && G.turn === G.ai.side) scheduleAI();   // AI 执红先行
+}
+
+function snap() {
+  return {
+    board: cloneBoard(G.board), turn: G.turn, last: G.last, lastText: G.lastText,
+    moveN: G.moveN, noCapHalf: G.noCapHalf,
+    clock: { r: G.clock.r, b: G.clock.b },
+    caps: { r: G.caps.r.slice(), b: G.caps.b.slice() },
+  };
+}
+
+function doMove(m) {
+  const b = G.board;
+  const pc = b[m.fy][m.fx];
+  if (!pc) return;
+  const cap = b[m.ty][m.tx];
+  G.history.push(snap());   // 双方各自完整记录 (棋谱回放/悔棋/联机回退对齐; 对方着法由 applyNetState 补记, 自身着法此处唯一记录)
+  b[m.ty][m.tx] = pc; b[m.fy][m.fx] = null;
+  if (cap) G.caps[pc[0]].push(cap);
+  G.last = [m.fx, m.fy, m.tx, m.ty];
+  G.lastText = (pc[0] === 'r' ? '红 ' : '黑 ') + moveText(pc, m);
+  G.replayTexts.push(G.lastText);   // 棋谱记录 (回放用)
+  G.moveN++;
+  G.noCapHalf = (cap || pc[1] === 'P') ? 0 : G.noCapHalf + 1;
+  G.turn = OPP[G.turn];
+  G.checkSide = inCheck(b, G.turn) ? G.turn : null;
+  G.sel = null;
+  G.anim = { fx: m.fx, fy: m.fy, tx: m.tx, ty: m.ty, p: 0, piece: pc, cap: !!cap };
+  G.legal = legalMoves(b, G.turn);
+  const isMate = !G.legal.length && !!G.checkSide;
+  const isStale = !G.legal.length && !G.checkSide;
+  // ===== 音效 / 特效 =====
+  const tx = pxOf(m.tx), ty = pyOf(m.ty);
+  if (cap) { SFX.cap(); burst(tx, ty, pc[0] === 'r' ? '#ff5566' : '#ffd700'); G.shake = 5; }
+  else SFX.move();
+  if (isMate) {
+    // 绝杀演出: 被将死方老将处爆红 + 金色大字 + 重震屏
+    const kp = kingPos(b, G.checkSide);
+    if (kp) burst(pxOf(kp.x), pyOf(kp.y), '#ff3344');
+    G.floats.push({ txt: '绝 杀 !', x: W / 2, y: H / 2, t: 0, big: true, color: '#ffd700' });
+    G.shake = 14; G.flash = 0.75;
+    SFX.mate();
+  } else if (G.checkSide) {
+    SFX.check();
+    G.floats.push({ txt: '将 军 !', x: W / 2, y: H / 2, t: 0, big: true, color: '#ff3344' });
+    G.flash = 0.4;
+  }
+  // ===== 记录 / 终局判定 =====
+  G.checkLog.push([OPP[G.turn], !!G.checkSide]);   // [行棋方, 该步是否将军]
+  const h = hashOf(b, G.turn);
+  G.hashList.push(h);
+  G.hashes[h] = (G.hashes[h] || 0) + 1;
+  if (isMate) {
+    endGame(OPP[G.turn], '绝杀! ' + (G.checkSide === 'r' ? '红方' : '黑方') + '老将无着应将', 1900);
+  } else if (isStale) {
+    endGame(OPP[G.turn], '困毙! ' + (G.turn === 'r' ? '红方' : '黑方') + '无子可动', 1300);
+  } else if (G.hashes[h] >= 3) {
+    const v = repetitionVerdict(G.hashList, G.checkLog, h);
+    if (v.draw) endGame(null, v.reason);
+    else endGame(OPP[v.loser], v.reason);
+  } else if (G.noCapHalf >= 120) {
+    endGame(null, '双方60回合未吃子');
+  }
+  // AI 回应
+  if (G.status === 'playing' && G.mode === 'ai' && G.turn === G.ai.side) scheduleAI();
+  // 房主广播
+  if (G.mode === 'online' && net.isHost && net.started && gameState === 'playing') broadcastState();
+}
+
+function endGame(winner, reason, delay) {
+  if (G.status !== 'playing') return;
+  G.status = winner ? (winner + '_win') : 'draw';
+  G.endReason = reason;
+  G.aiBusy = false;
+  paused = false;
+  hideUndoAsk();
+  if (mode === 'ai') {
+    const me = OPP[G.ai.side];   // 玩家执子方
+    if (G.status === me + '_win') SFX.win();
+    else if (G.status === G.ai.side + '_win') SFX.lose();
+    else SFX.draw();
+  }
+  else if (mode === 'online') { if (G.status === net.mySide + '_win') SFX.win(); else if (G.status === 'draw') SFX.draw(); else SFX.lose(); }
+  else SFX.win();
+  if (G.mode === 'online' && net.isHost && net.started) broadcastState();
+  setTimeout(showOver, delay || 1000);
+}
+
+function showOver() {
+  if (!G || G.status === 'playing') return;
+  gameState = 'over';
+  paused = false;
+  stopReplayAuto();
+  let title, color;
+  if (G.status === 'draw') { title = '和 棋'; color = '#ffd700'; }
+  else if (mode === 'ai') {
+    const me = OPP[G.ai.side];   // 玩家执子方
+    const won = G.status === me + '_win';
+    title = won ? '胜 利' : '失 败';
+    color = won ? '#00ff88' : '#ff4455';
+  }
+  else if (mode === 'online') {
+    const won = G.status === net.mySide + '_win';
+    title = won ? '胜 利' : '失 败';
+    color = won ? '#00ff88' : '#ff4455';
+  } else { title = G.status === 'r_win' ? '红方胜' : '黑方胜'; color = G.status === 'r_win' ? '#ff5566' : '#ffd700'; }
+  $('over-title').textContent = title;
+  $('over-title').style.color = color;
+  $('over-title').style.textShadow = '0 0 22px ' + color;
+  $('over-reason').textContent = G.endReason || '';
+  const myCaps = mode === 'online' ? G.caps[net.mySide].length
+    : mode === 'ai' ? G.caps[OPP[G.ai.side]].length : G.caps.r.length;
+  $('over-stats').innerHTML = '总回合: ' + Math.ceil(G.moveN / 2) + ' · 你方吃子: ' + myCaps + ' 颗<br>上一步: ' + (G.lastText || '—');
+  if (mode === 'online') {
+    if (net.isHost) {
+      $('restart-btn').classList.remove('hidden');
+      $('restart-btn').textContent = '换边再战 (轮换先后手)';
+      $('net-restart-hint').classList.add('hidden');
+    } else {
+      $('restart-btn').classList.add('hidden');
+      $('net-restart-hint').textContent = '等待房主换边再战...';
+      $('net-restart-hint').classList.remove('hidden');
+    }
+    // 联机: 双方均可申请悔棋 (需对方同意), 连接存活且自己行过棋才显示
+    const myMoved = G.moveN >= (net.mySide === 'r' ? 1 : 2);
+    const canUndo = !!net.conn && net.started && myMoved;
+    $('over-undo-btn').classList.toggle('hidden', !canUndo);
+    $('over-undo-btn').textContent = '申请悔棋';
+  } else {
+    $('restart-btn').classList.remove('hidden');
+    $('restart-btn').textContent = '再 来 一 局';
+    $('net-restart-hint').classList.add('hidden');
+    // 单机/AI: 有历史即可悔棋重下
+    $('over-undo-btn').classList.toggle('hidden', !G.history.length);
+    $('over-undo-btn').textContent = '悔 棋';
+  }
+  // 棋谱回放: 有历史着法即可复盘
+  $('over-replay-btn').classList.toggle('hidden', !G.history.length);
+  hideAllScreens();
+  $('over-screen').classList.remove('hidden');
+  $('ib-menu').style.display = 'none';
+}
+
+// 从快照恢复对局状态 (悔棋 / 联机回退共用)
+function restoreSnap(s) {
+  G.board = cloneBoard(s.board);
+  G.turn = s.turn; G.last = s.last; G.lastText = s.lastText;
+  G.moveN = s.moveN; G.noCapHalf = s.noCapHalf;
+  G.clock = { r: s.clock.r, b: s.clock.b };
+  G.caps = { r: s.caps.r.slice(), b: s.caps.b.slice() };
+  G.hashList.length = s.moveN + 1;          // 哈希列表与步数严格对齐 (初始局面 + 每步一个)
+  G.checkLog.length = s.moveN;
+  G.hashes = {};
+  for (const h of G.hashList) G.hashes[h] = (G.hashes[h] || 0) + 1;
+  G.status = 'playing'; G.endReason = '';
+  G.sel = null; G.anim = null; G.aiBusy = false;
+  G.checkSide = inCheck(G.board, G.turn) ? G.turn : null;
+  G.legal = legalMoves(G.board, G.turn);
+}
+
+function undoGame() {
+  if (!G || !G.history.length || G.mode === 'online') return;
+  paused = false;   // 悔棋后回到对局, 恢复计时
+  let s = G.history.pop();
+  let steps = 1;
+  // 人机模式: 若回退点是 AI 行棋前, 再退一步回到玩家行棋前
+  if (G.mode === 'ai' && s.turn === G.ai.side && G.history.length) { s = G.history.pop(); steps = 2; }
+  G.replayTexts.length = Math.max(0, G.replayTexts.length - steps);   // 棋谱同步截断
+  restoreSnap(s);
+  SFX.undo();   // 悔棋倒带音效
+  G.floats.push({ txt: '已 悔 棋', x: W / 2, y: H * 0.35, t: 0, big: true, color: '#00ffff' });
+  // 若回退后轮到 AI (如玩家执黑、开局即悔棋), 让 AI 重新行棋避免卡住
+  if (G.mode === 'ai' && G.turn === G.ai.side) scheduleAI();
+}
+
+// ============ 棋谱回放 (对局中/结算后复盘全程着法) ============
+let replayFinal = null;          // 进入回放时的局面快照 (终局或当前)
+let replayFinalStatus = '', replayFinalReason = '';
+let replayIdx = 0, replayAuto = null;
+
+function enterReplay() {
+  if (!G || !G.history.length) return;
+  SFX.click();
+  stopReplayAuto();
+  replayFinal = snap();
+  replayFinalStatus = G.status;
+  replayFinalReason = G.endReason;
+  replayIdx = 0;
+  gameState = 'replay';
+  paused = true;
+  hideAllScreens();
+  hideUndoAsk();
+  $('ib-menu').style.display = 'none';
+  $('replay-bar').classList.remove('hidden');
+  replayGo(0);
+}
+
+// 跳到第 i 步后的局面 (0=初始, history.length=终局)
+function replayGo(i) {
+  const total = G.history.length;
+  replayIdx = Math.max(0, Math.min(i, total));
+  if (replayIdx < total) restoreSnap(G.history[replayIdx]);
+  else restoreSnap(replayFinal);
+  let txt = replayIdx === 0 ? '初始局面' : (G.replayTexts[replayIdx - 1] || '');
+  if (replayIdx === total && replayFinalStatus !== 'playing')
+    txt += '  · 终局: ' + (replayFinalReason || '对局结束');
+  $('rp-step').textContent = replayIdx + ' / ' + total;
+  $('rp-text').textContent = txt;
+  SFX.click();
+}
+
+function stopReplayAuto() {
+  if (replayAuto) { clearInterval(replayAuto); replayAuto = null; }
+  const b = $('rp-auto'); if (b) b.textContent = '▶ 自动';
+}
+
+function replayAutoToggle() {
+  if (replayAuto) { stopReplayAuto(); return; }
+  SFX.click();
+  $('rp-auto').textContent = '⏸ 停止';
+  replayAuto = setInterval(() => {
+    if (!G || replayIdx >= G.history.length) { stopReplayAuto(); return; }
+    replayGo(replayIdx + 1);
+  }, 900);
+}
+
+function exitReplay() {
+  if (gameState !== 'replay') return;
+  SFX.click();
+  stopReplayAuto();
+  $('replay-bar').classList.add('hidden');
+  restoreSnap(replayFinal);
+  G.status = replayFinalStatus;         // 恢复进入前的终局/对局状态
+  G.endReason = replayFinalReason;
+  if (G.status !== 'playing') { paused = false; gameState = 'over'; showOver(); }
+  else { gameState = 'playing'; openPause(); }   // 从暂停进入 → 回到对局菜单
+}
+
+// ============ 渲染 ============
+function dxOf(x) { return G && G.flip ? 8 - x : x; }
+function dyOf(y) { return G && G.flip ? 9 - y : y; }
+function pxOf(x) { return bx + dxOf(x) * cell; }
+function pyOf(y) { return by + dyOf(y) * cell; }
+
+function rrect(g, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+function burst(x, y, color) {
+  for (let i = 0; i < 14; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 1.5 + Math.random() * 3.5;
+    G.particles.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color: color });
+  }
+}
+
+function drawPiece(x, y, pc, opt) {
+  opt = opt || {};
+  const cx = pxOf(x), cy = pyOf(y);
+  const r = cell * 0.44 * (opt.scale || 1);
+  const side = pc[0];
+  const col = side === 'r' ? '#ff5566' : '#ffd700';
+  ctx.save();
+  ctx.globalAlpha = opt.alpha != null ? opt.alpha : 1;
+  ctx.shadowColor = col;
+  ctx.shadowBlur = cell * 0.28;
+  const grd = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.35, r * 0.2, cx, cy, r);
+  grd.addColorStop(0, side === 'r' ? '#33141a' : '#332a10');
+  grd.addColorStop(1, '#0a0a12');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = col;
+  ctx.lineWidth = Math.max(1.5, cell * 0.06);
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.86, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = col;
+  ctx.font = 'bold ' + Math.floor(cell * 0.52) + 'px "KaiTi","STKaiti","BiauKai","SimSun",serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(CHAR[side][pc[1]], cx, cy + cell * 0.02);
+  ctx.restore();
+}
+
+function drawBoard() {
+  // 面板
+  const px0 = bx - cell * 0.6, py0 = by - cell * 0.6;
+  const pw = bw + cell * 1.2, ph = bh + cell * 1.2;
+  ctx.save();
+  const bg = ctx.createLinearGradient(0, py0, 0, py0 + ph);
+  bg.addColorStop(0, '#0d1018'); bg.addColorStop(1, '#0a0c12');
+  ctx.fillStyle = bg;
+  rrect(ctx, px0, py0, pw, ph, 10); ctx.fill();
+  ctx.strokeStyle = '#ffd70055'; ctx.lineWidth = 2;
+  rrect(ctx, px0, py0, pw, ph, 10); ctx.stroke();
+  ctx.strokeStyle = '#ffd70022'; ctx.lineWidth = 1;
+  rrect(ctx, px0 + 5, py0 + 5, pw - 10, ph - 10, 7); ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(0,220,150,0.5)';
+  ctx.lineWidth = 1.2;
+  // 横线
+  for (let y = 0; y < 10; y++) {
+    ctx.beginPath(); ctx.moveTo(bx, pyOf(y)); ctx.lineTo(bx + bw, pyOf(y)); ctx.stroke();
+  }
+  // 竖线 (中间断河)
+  for (let x = 0; x < 9; x++) {
+    const gx = pxOf(x);
+    if (x === 0 || x === 8) {
+      ctx.beginPath(); ctx.moveTo(gx, by); ctx.lineTo(gx, by + bh); ctx.stroke();
+    } else {
+      const yA = pyOf(0), yB = pyOf(4), yC = pyOf(5), yD = pyOf(9);
+      ctx.beginPath(); ctx.moveTo(gx, yA); ctx.lineTo(gx, yB); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(gx, yC); ctx.lineTo(gx, yD); ctx.stroke();
+    }
+  }
+  // 九宫斜线
+  const pal = [[3, 0, 5, 2], [5, 0, 3, 2], [3, 7, 5, 9], [5, 7, 3, 9]];
+  for (const [x1, y1, x2, y2] of pal) {
+    ctx.beginPath(); ctx.moveTo(pxOf(x1), pyOf(y1)); ctx.lineTo(pxOf(x2), pyOf(y2)); ctx.stroke();
+  }
+  // 楚河汉界
+  ctx.fillStyle = 'rgba(255,215,0,0.30)';
+  ctx.font = 'bold ' + Math.floor(cell * 0.5) + 'px "KaiTi","STKaiti","SimSun",serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const ry = (pyOf(4) + pyOf(5)) / 2;
+  if (G && G.flip) {
+    ctx.save(); ctx.translate(bx + bw * 0.26, ry); ctx.rotate(Math.PI); ctx.fillText('楚 河', 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(bx + bw * 0.74, ry); ctx.rotate(Math.PI); ctx.fillText('汉 界', 0, 0); ctx.restore();
+  } else {
+    ctx.fillText('楚 河', bx + bw * 0.26, ry);
+    ctx.fillText('汉 界', bx + bw * 0.74, ry);
+  }
+  // 炮/兵位标记
+  const marks = [[1, 2], [7, 2], [1, 7], [7, 7], [0, 3], [2, 3], [4, 3], [6, 3], [8, 3], [0, 6], [2, 6], [4, 6], [6, 6], [8, 6]];
+  ctx.strokeStyle = 'rgba(0,220,150,0.45)';
+  for (const [mx, my] of marks) {
+    const gx = pxOf(mx), gy = pyOf(my), s = cell * 0.14, o = cell * 0.10;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      if (mx === 0 && sx < 0) continue;
+      if (mx === 8 && sx > 0) continue;
+      ctx.beginPath();
+      ctx.moveTo(gx + sx * o, gy + sy * (o + s));
+      ctx.lineTo(gx + sx * o, gy + sy * o);
+      ctx.lineTo(gx + sx * (o + s), gy + sy * o);
+      ctx.stroke();
+    }
+  }
+  // 路数汉字
+  ctx.fillStyle = 'rgba(0,200,160,0.5)';
+  ctx.font = Math.floor(cell * 0.30) + 'px "KaiTi","STKaiti","SimSun",serif';
+  const topSide = (G && G.flip) ? 'r' : 'b';
+  for (let x = 0; x < 9; x++) {
+    const n = topSide === 'b' ? x + 1 : 9 - x;
+    ctx.fillText(CN_NUM[n - 1], pxOf(x), py0 + cell * 0.32);
+    ctx.fillText(CN_NUM[9 - n], pxOf(x), py0 + ph - cell * 0.32);
+  }
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  // 背景
+  const bgG = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.75);
+  bgG.addColorStop(0, '#0b0e16'); bgG.addColorStop(1, '#05050c');
+  ctx.fillStyle = bgG; ctx.fillRect(0, 0, W, H);
+
+  if (!G) return;
+  ctx.save();
+  if (G.shake > 0.3) ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
+
+  drawBoard();
+
+  // 上一步标记
+  if (G.last) {
+    const [fx, fy, tx, ty] = G.last;
+    ctx.strokeStyle = 'rgba(255,215,0,0.55)'; ctx.lineWidth = 2;
+    for (const [x, y] of [[fx, fy], [tx, ty]]) {
+      const cx = pxOf(x), cy = pyOf(y), r = cell * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy - r + r * 0.4); ctx.lineTo(cx - r, cy - r); ctx.lineTo(cx - r + r * 0.4, cy - r);
+      ctx.moveTo(cx + r - r * 0.4, cy - r); ctx.lineTo(cx + r, cy - r); ctx.lineTo(cx + r, cy - r + r * 0.4);
+      ctx.moveTo(cx + r, cy + r - r * 0.4); ctx.lineTo(cx + r, cy + r); ctx.lineTo(cx + r - r * 0.4, cy + r);
+      ctx.moveTo(cx - r + r * 0.4, cy + r); ctx.lineTo(cx - r, cy + r); ctx.lineTo(cx - r, cy + r - r * 0.4);
+      ctx.stroke();
+    }
+  }
+
+  // 棋子
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 9; x++) {
+    const pc = G.board[y][x];
+    if (!pc) continue;
+    if (G.anim && G.anim.tx === x && G.anim.ty === y) continue;   // 动画中的棋子稍后画
+    drawPiece(x, y, pc);
+  }
+
+  // 选中 + 可走提示
+  if (G.sel && G.status === 'playing') {
+    const s = G.sel;
+    const cx = pxOf(s.x), cy = pyOf(s.y);
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 180);
+    ctx.strokeStyle = 'rgba(0,255,136,' + (0.5 + pulse * 0.5) + ')';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy, cell * 0.52, 0, Math.PI * 2); ctx.stroke();
+    for (const m of G.legal) {
+      if (m.fx !== s.x || m.fy !== s.y) continue;
+      const gx = pxOf(m.tx), gy = pyOf(m.ty);
+      if (G.board[m.ty][m.tx]) {
+        ctx.strokeStyle = 'rgba(255,200,0,0.9)'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(gx, gy, cell * 0.5, 0, Math.PI * 2); ctx.stroke();
+      } else {
+        ctx.fillStyle = 'rgba(0,255,136,0.8)';
+        ctx.beginPath(); ctx.arc(gx, gy, cell * 0.13, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  // 将军警示: 红光脉冲圈 + 准星瞄准线
+  if (G.checkSide && G.status === 'playing') {
+    const kp = kingPos(G.board, G.checkSide);
+    if (kp) {
+      const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 120);
+      const kx = pxOf(kp.x), ky = pyOf(kp.y);
+      ctx.strokeStyle = 'rgba(255,40,60,' + (0.55 + pulse * 0.45) + ')';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(kx, ky, cell * 0.55, 0, Math.PI * 2); ctx.stroke();
+      // 准星线 (从棋盘四角指向被将老将)
+      ctx.strokeStyle = 'rgba(255,40,60,' + (0.18 + pulse * 0.3) + ')';
+      ctx.lineWidth = 1.5;
+      const corners = [[bx, by], [bx + bw, by], [bx, by + bh], [bx + bw, by + bh]];
+      for (const [cx0, cy0] of corners) {
+        ctx.beginPath(); ctx.moveTo(cx0, cy0); ctx.lineTo(kx, ky); ctx.stroke();
+      }
+      // 老将头顶 "将军" 小标
+      ctx.fillStyle = 'rgba(255,60,70,' + (0.7 + pulse * 0.3) + ')';
+      ctx.font = 'bold ' + Math.floor(cell * 0.32) + 'px "Courier New", monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('将军!', kx, ky - cell * 0.62);
+    }
+  }
+
+  // 动画棋子
+  if (G.anim) {
+    const a = G.anim;
+    const t = Math.min(1, a.p);
+    const ix = a.fx + (a.tx - a.fx) * t, iy = a.fy + (a.ty - a.fy) * t;
+    const cx = bx + dxOf(Math.round(ix)) * cell, cy = by + dyOf(Math.round(iy)) * cell;
+    // 用连续坐标插值 (处理翻转)
+    const dxF = a.fx + (a.tx - a.fx) * t, dyF = a.fy + (a.ty - a.fy) * t;
+    const dispX = G.flip ? 8 - dxF : dxF, dispY = G.flip ? 9 - dyF : dyF;
+    const pcx = bx + dispX * cell, pcy = by + dispY * cell;
+    const r = cell * 0.44;
+    const side = a.piece[0];
+    const col = side === 'r' ? '#ff5566' : '#ffd700';
+    ctx.save();
+    ctx.shadowColor = col; ctx.shadowBlur = cell * 0.35;
+    const grd = ctx.createRadialGradient(pcx - r * 0.3, pcy - r * 0.35, r * 0.2, pcx, pcy, r);
+    grd.addColorStop(0, side === 'r' ? '#33141a' : '#332a10');
+    grd.addColorStop(1, '#0a0a12');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(pcx, pcy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, cell * 0.06);
+    ctx.beginPath(); ctx.arc(pcx, pcy, r * 0.86, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = col;
+    ctx.font = 'bold ' + Math.floor(cell * 0.52) + 'px "KaiTi","STKaiti","BiauKai","SimSun",serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(CHAR[side][a.piece[1]], pcx, pcy + cell * 0.02);
+    ctx.restore();
+    void cx; void cy;
+  }
+
+  drawHud();
+
+  // 粒子
+  for (const p of G.particles) {
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+  }
+  ctx.globalAlpha = 1;
+  // 浮字
+  for (const f of G.floats) {
+    const a = f.t < 0.2 ? f.t / 0.2 : Math.max(0, 1 - (f.t - 0.2) / 1.1);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = f.color || '#ffd700';
+    ctx.font = 'bold ' + (f.big ? 44 : 20) + 'px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = f.color || '#ffd700'; ctx.shadowBlur = 18;
+    ctx.fillText(f.txt, f.x, f.y - (f.t * 26));
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // 白闪
+  if (G.flash > 0.01) {
+    ctx.fillStyle = 'rgba(255,60,60,' + (G.flash * 0.22) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function fmtClock(ms) {
+  ms = Math.max(0, ms);
+  const s = Math.ceil(ms / 1000);
+  return Math.floor(s / 60) + ':' + (s % 60 < 10 ? '0' : '') + (s % 60);
+}
+
+// AI 思考动画: 旋转双弧进度环 + 棋力等级 + 跳动省略点 + 实时计时
+function drawThinking(cx, y) {
+  const t = Date.now();
+  const lvName = G.ai ? ({ easy: '初学', normal: '进阶', hard: '大师' })[G.ai.level] : '';
+  const label = '恭夫AI·' + lvName + ' 深度推演中';
+  ctx.save();
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 13px "Courier New", monospace';
+  const lw = ctx.measureText(label).width;
+  const el = G.aiBusyAt ? ((t - G.aiBusyAt) / 1000).toFixed(1) + 's' : '';
+  ctx.font = '12px "Courier New", monospace';
+  const ew = el ? ctx.measureText(el).width : 0;
+  const totalW = 22 + lw + 40 + ew;
+  const x0 = cx - totalW / 2 + 22;
+  // 旋转双弧环 (绿青交替)
+  const r = 8.5;
+  const a0 = (t / 380) % (Math.PI * 2);
+  ctx.lineCap = 'round';
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2.4; ctx.shadowColor = '#00ff88';
+  ctx.beginPath(); ctx.arc(x0 - 15, y, r, a0, a0 + Math.PI * 0.75); ctx.stroke();
+  ctx.strokeStyle = '#00ffff'; ctx.shadowColor = '#00ffff';
+  ctx.beginPath(); ctx.arc(x0 - 15, y, r, a0 + Math.PI, a0 + Math.PI * 1.75); ctx.stroke();
+  ctx.shadowBlur = 0;
+  // 等级文字 (呼吸)
+  const pulse = 0.55 + 0.45 * Math.sin(t / 150);
+  ctx.font = 'bold 13px "Courier New", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(0,255,136,' + (0.55 + pulse * 0.45) + ')';
+  ctx.fillText(label, x0, y);
+  // 三个跳动点 (逐个点亮 + 弹跳)
+  const on = Math.floor(t / 240) % 3;
+  for (let i = 0; i < 3; i++) {
+    const dy = i === on ? -3 : 0;
+    ctx.fillStyle = i === on ? '#00ff88' : 'rgba(0,255,136,0.3)';
+    ctx.beginPath(); ctx.arc(x0 + lw + 8 + i * 9, y + dy, 2.6, 0, Math.PI * 2); ctx.fill();
+  }
+  // 右侧实时计时
+  if (el) {
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(0,200,255,0.85)';
+    ctx.font = '12px "Courier New", monospace';
+    ctx.fillText(el, cx + totalW / 2, y);
+  }
+  ctx.restore();
+}
+
+function drawHud() {
+  const topSide = G.flip ? 'r' : 'b';               // 棋盘上/下两端对应的执子方 (翻转时同步)
+  const botSide = OPP[topSide];
+  const ty = 20 + SAFE_T;                           // 顶行: 名字/时钟
+  const cyT = ty + 22;                              // 顶二行: 吃子托盘
+  const byR = H - 18 - SAFE_B;                      // 底行: 名字/时钟
+  const cyB = H - 44 - SAFE_B;                      // 底二行: 吃子托盘
+  const syR = H - 68 - SAFE_B;                      // 状态行 (AI思考/将军/上一步)
+  const actT = G.turn === topSide && G.status === 'playing';
+  const actB = G.turn === botSide && G.status === 'playing';
+  ctx.textBaseline = 'middle';
+  // 顶部: 名字(左) + 时钟(右, 左移避开菜单按钮)
+  ctx.textAlign = 'left'; ctx.font = 'bold 15px "Courier New", monospace';
+  ctx.fillStyle = actT ? '#ffd700' : '#667788';
+  let topLabel = (actT ? '▶ ' : '  ') + G.names[topSide];
+  if (G.mode === 'online' && net.mySide === topSide) topLabel += ' ▲你';
+  ctx.fillText(topLabel, 14, ty);
+  ctx.font = 'bold 17px "Courier New", monospace';
+  ctx.fillStyle = G.clock[topSide] < 30000 ? '#ff5566' : (actT ? '#ffd700' : '#8899aa');
+  ctx.textAlign = 'right';
+  ctx.fillText(fmtClock(G.clock[topSide]), W - 64, ty);
+  // 顶部吃子托盘 (吃到的对方棋子; 右移避开 ☰ 菜单按钮)
+  ctx.textAlign = 'right'; ctx.font = '13px "KaiTi","SimSun",serif';
+  ctx.fillStyle = topSide === 'r' ? 'rgba(255,215,0,0.75)' : 'rgba(255,85,102,0.75)';
+  ctx.fillText(G.caps[topSide].map(p => CHAR[p[0]][p[1]]).join(''), W - 64, cyT);
+  // 底部: 名字(左) + 时钟(右)
+  ctx.textAlign = 'left'; ctx.font = 'bold 15px "Courier New", monospace';
+  ctx.fillStyle = actB ? '#ffd700' : '#667788';
+  let botLabel = (actB ? '▶ ' : '  ') + G.names[botSide];
+  if (G.mode === 'online' && net.mySide === botSide) botLabel += ' ▲你';
+  ctx.fillText(botLabel, 14, byR);
+  ctx.font = 'bold 17px "Courier New", monospace';
+  ctx.fillStyle = G.clock[botSide] < 30000 ? '#ff5566' : (actB ? '#ffd700' : '#8899aa');
+  ctx.textAlign = 'right';
+  ctx.fillText(fmtClock(G.clock[botSide]), W - 14, byR);
+  // 底部吃子托盘
+  ctx.font = '13px "KaiTi","SimSun",serif';
+  ctx.fillStyle = botSide === 'r' ? 'rgba(255,215,0,0.75)' : 'rgba(255,85,102,0.75)';
+  ctx.fillText(G.caps[botSide].map(p => CHAR[p[0]][p[1]]).join(''), W - 14, cyB);
+  // 状态行: AI 思考动画 / 将军警示 / 上一步
+  if (G.aiBusy) { drawThinking(W / 2, syR); return; }
+  ctx.textAlign = 'center'; ctx.font = '13px "Courier New", monospace';
+  if (G.checkSide && G.status === 'playing') {
+    // 被将军: 闪烁警示 + 谁被将
+    const blinkOn = Math.floor(Date.now() / 350) % 2 === 0;
+    if (blinkOn) {
+      ctx.fillStyle = '#ff3344';
+      ctx.font = 'bold 13px "Courier New", monospace';
+      ctx.fillText('⚠ ' + (G.checkSide === 'r' ? '红方' : '黑方') + '被将军! 须应将', W / 2, syR);
+    }
+  } else {
+    ctx.fillStyle = '#556677';
+    ctx.fillText(G.lastText ? '上一步: ' + G.lastText : (G.turn === 'r' ? '红方行棋' : '黑方行棋'), W / 2, syR);
+  }
+}
+
+// ============ 主循环 ============
+let lastTs = 0;
+function loop(ts) {
+  const dt = Math.min(100, ts - lastTs || 16);
+  lastTs = ts;
+  if (G && gameState === 'playing' && G.status === 'playing') {
+    // 计时 (本地/AI/房主权威; 客户端本地镜像) — 暂停中冻结棋钟
+    if (!paused) {
+      G.clock[G.turn] -= dt;
+      if (G.clock[G.turn] <= 0) {
+        G.clock[G.turn] = 0;
+        if (G.mode !== 'online' || net.isHost) endGame(OPP[G.turn], '超时判负');
+      }
+    }
+    if (G.anim) {
+      G.anim.p += dt / 150;
+      if (G.anim.p >= 1) G.anim = null;
+    }
+  }
+  if (G) {
+    for (const p of G.particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= dt / 600; }
+    G.particles = G.particles.filter(p => p.life > 0);
+    for (const f of G.floats) f.t += dt / 1000;
+    G.floats = G.floats.filter(f => f.t < 1.4);
+    if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 0.02);
+    if (G.flash > 0) G.flash = Math.max(0, G.flash - dt * 0.0016);
+    draw();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ============ 输入 ============
+function isTouchDevice() { return 'ontouchstart' in window || navigator.maxTouchPoints > 0; }
+function tryAutoFullscreen() {
+  if (!isTouchDevice()) return;
+  const el = document.documentElement;
+  try {
+    const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (fn) fn.call(el);
+  } catch (e) {}
+}
+
+cv.addEventListener('pointerdown', e => {
+  ensureAudio();
+  if (!G || gameState !== 'playing' || G.status !== 'playing') return;
+  if (G.mode === 'ai' && (G.aiBusy || G.turn === G.ai.side)) return;   // AI 行棋中/轮到AI时不可操作
+  if (G.mode === 'online') {
+    if (!net.started || G.turn !== net.mySide) return;
+  }
+  if (G.anim) return;
+  const rect = cv.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const gx = Math.round((px - bx) / cell), gy = Math.round((py - by) / cell);
+  if (gx < 0 || gx > 8 || gy < 0 || gy > 9) return;
+  const lx = G.flip ? 8 - gx : gx, ly = G.flip ? 9 - gy : gy;
+  if (Math.abs(px - (bx + gx * cell)) > cell * 0.55 || Math.abs(py - (by + gy * cell)) > cell * 0.55) return;
+  const pc = G.board[ly][lx];
+  if (pc && pc[0] === G.turn) {
+    if (G.sel && G.sel.x === lx && G.sel.y === ly) { G.sel = null; SFX.click(); return; }
+    G.sel = { x: lx, y: ly };
+    SFX.select();
+    return;
+  }
+  if (G.sel) {
+    const m = G.legal.find(m => m.fx === G.sel.x && m.fy === G.sel.y && m.tx === lx && m.ty === ly);
+    if (m) {
+      if (G.mode === 'online' && !net.isHost) {
+        // 客户端: 本地先行应用 (体验流畅), 上报房主校验
+        doMove(m);
+        net.conn && net.conn.send({ t: 'mv', fx: m.fx, fy: m.fy, tx: m.tx, ty: m.ty });
+      } else {
+        doMove(m);
+      }
+      return;
+    }
+  }
+  G.sel = null;
+});
+
+// ============ 联机 (PeerJS, 房主权威) ============
+const NET_PREFIX = 'xqgf-';
+const NET_ICE = { iceServers: [
+  { urls: 'stun:stun.qq.com:3478' },
+  { urls: 'stun:stun.miwifi.com:3478' },
+  { urls: 'stun:stun.l.google.com:19302' }
+]};
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+let net = {
+  peer: null, conn: null, isHost: false, inRoom: false, started: false,
+  myName: '', oppName: '', mySide: 'r', code: '',
+};
+
+function genCode() {
+  let s = '';
+  for (let i = 0; i < 4; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return s;
+}
+function netErr(msg) { $('net-error').textContent = msg; SFX.netErr(); }
+function netStatus(msg) { $('net-status').textContent = msg || ''; }
+function netRenderLobby() {
+  const el = $('net-lobby-list');
+  if (!net.inRoom) { el.innerHTML = ''; return; }
+  let html = '<div class="lobby-row"><div class="lobby-dot" style="background:#ffd700"></div>' +
+    '<span style="flex:1">' + (net.isHost ? '房主 ' : '已加入 ') + net.myName + ' (你)</span></div>';
+  if (net.oppName) {
+    html += '<div class="lobby-row"><div class="lobby-dot" style="background:#00ff88"></div>' +
+      '<span style="flex:1">' + (net.isHost ? '' : '房主 ') + net.oppName + '</span>' +
+      '<span style="color:#00ff88">就绪</span></div>';
+  } else {
+    html += '<div class="lobby-row"><div class="lobby-dot" style="background:#334455"></div>' +
+      '<span style="flex:1">等待对手加入...</span></div>';
+  }
+  el.innerHTML = html;
+  if (net.isHost) {
+    $('net-start-btn').classList.toggle('hidden', !net.oppName);
+    $('net-wait-hint').classList.add('hidden');
+  } else {
+    $('net-start-btn').classList.add('hidden');
+    $('net-wait-hint').classList.remove('hidden');
+  }
+  $('net-leave-btn').classList.toggle('hidden', !net.inRoom);
+  $('net-create-btn').classList.toggle('hidden', net.inRoom);
+  $('net-code-show').textContent = net.inRoom ? net.code : '----';
+}
+
+function netCreateRoom() {
+  ensureAudio(); SFX.click();
+  const name = $('nick-input').value.trim() || '玩家';
+  net.myName = name;
+  netErr('');
+  netStatus('正在创建房间...');
+  netCleanup();
+  net.isHost = true; net.inRoom = true; net.mySide = 'r';
+  let attempts = 0;
+  const spawn = () => {
+    net.code = genCode();
+    try {
+      net.peer = new Peer(NET_PREFIX + net.code, { debug: 0, config: NET_ICE });
+    } catch (e) { netErr('创建失败: ' + e.message); netCleanup(); return; }
+    net.peer.on('open', () => {
+      netStatus('房间已创建! 把房码发给好友');
+      netRenderLobby();
+    });
+    net.peer.on('error', err => {
+      if (String(err.type) === 'unavailable-id' && attempts < 4) {
+        attempts++;
+        try { net.peer.destroy(); } catch (e) {}
+        netStatus('房码被占用, 正在换新房码...');
+        spawn();
+        return;
+      }
+      netErr('连接错误: ' + (err.type || err.message));
+      netCleanup();
+    });
+    net.peer.on('connection', c => {
+      if (net.conn) { try { c.close(); } catch (e) {} return; }
+      net.conn = c;
+      c.on('open', () => {
+        c.send({ t: 'hello', name: net.myName });
+        netStatus('对手已连接!');
+      });
+      c.on('data', d => hostOnData(d));
+      c.on('close', () => {
+        net.conn = null; net.oppName = '';
+        if (net.started) {
+          if (G && G.status === 'playing') { endGame(net.mySide, '对手离开'); }
+          net.started = false;
+          netStatus('对手已离开');
+        } else {
+          netStatus('对手离开, 可等待新对手');
+        }
+        netRenderLobby();
+      });
+    });
+  };
+  spawn();
+}
+
+function hostOnData(d) {
+  if (!d || !d.t) return;
+  if (d.t === 'join') {
+    net.oppName = String(d.name || '对手').slice(0, 8);
+    netRenderLobby();
+    if (net.conn) net.conn.send({ t: 'hello', name: net.myName });
+  } else if (d.t === 'mv') {
+    if (!net.started || !G || G.status !== 'playing' || G.turn !== OPP[net.mySide]) return;
+    const m = G.legal.find(x => x.fx === d.fx && x.fy === d.fy && x.tx === d.tx && x.ty === d.ty);
+    if (m) doMove(m);
+  } else if (d.t === 'resign') {
+    if (net.started && G && G.status === 'playing') endGame(net.mySide, '对方认输');
+  } else if (d.t === 'undoReq') {
+    // 客户端申请悔棋 → 弹窗询问
+    if (!net.started || !G) return;
+    SFX.click();
+    askKind = 'undo';
+    showUndoAsk('ask', '「' + (net.oppName || '对方') + '」申请悔棋\n将回退到你行棋之前\n是否同意?');
+  } else if (d.t === 'undoAck') {
+    // 客户端回应我的申请
+    if (d.agree) hostRollback(net.mySide);
+    else { undoAsked = false; SFX.undoNo(); showUndoAsk('info', '对方拒绝了你的悔棋申请'); }
+  } else if (d.t === 'drawReq') {
+    // 客户端申请求和 → 弹窗询问
+    if (!net.started || !G || G.status !== 'playing') return;
+    SFX.click();
+    askKind = 'draw';
+    showUndoAsk('ask', '「' + (net.oppName || '对方') + '」申请求和\n是否同意和棋?', '求 和', '同 意 和 棋', '拒 绝');
+  } else if (d.t === 'drawAck') {
+    // 客户端回应我的求和申请
+    if (d.agree) { if (G && G.status === 'playing') endGame(null, '双方同意和棋'); }
+    else { drawAsked = false; showUndoAsk('info', '对方拒绝了你的求和申请', '求 和'); }
+  }
+}
+
+function netJoinRoom() {
+  ensureAudio(); SFX.click();
+  const name = $('nick-input').value.trim() || '玩家';
+  const code = $('net-join-code').value.trim().toUpperCase();
+  if (code.length !== 4) return netErr('请输入 4 位房码');
+  netErr('');
+  net.myName = name;
+  netCleanup();
+  net.isHost = false; net.mySide = 'b';
+  netStatus('正在连接房间 ' + code + ' ...');
+  try {
+    net.peer = new Peer({ debug: 0, config: NET_ICE });
+  } catch (e) { netErr('创建失败: ' + e.message); return; }
+  let joined = false;
+  const to = setTimeout(() => { if (!joined) { netErr('连接超时, 请检查房码'); netCleanup(); } }, 12000);
+  net.peer.on('open', () => {
+    net.conn = net.peer.connect(NET_PREFIX + code, { reliable: true });
+    net.conn.on('open', () => {
+      joined = true; clearTimeout(to);
+      net.inRoom = true; net.code = code;
+      net.conn.send({ t: 'join', name: net.myName });
+      netStatus('已连接! 等待房主开始...');
+      netRenderLobby();
+    });
+    net.conn.on('data', d => clientOnData(d));
+    net.conn.on('close', () => {
+      if (gameState === 'playing' || gameState === 'over') {
+        alert('与房主的连接已断开');
+        backToMenu();
+      } else {
+        netStatus('连接断开');
+        netCleanup();
+      }
+    });
+  });
+  net.peer.on('error', err => {
+    clearTimeout(to);
+    if (String(err.type) === 'peer-unavailable') netErr('房间 ' + code + ' 不存在, 请核对房码');
+    else netErr('连接错误: ' + (err.type || err.message));
+    netCleanup();
+  });
+}
+
+function clientOnData(d) {
+  if (!d || !d.t) return;
+  if (d.t === 'hello') {
+    net.oppName = String(d.name || '房主').slice(0, 8);
+    netRenderLobby();
+  } else if (d.t === 'start') {
+    net.oppName = String(d.host || '房主').slice(0, 8);
+    net.started = true;
+    newGame('online');
+  } else if (d.t === 'rst') {
+    if (gameState === 'over' || gameState === 'playing') {
+      if (d.swap) net.mySide = OPP[net.mySide];   // 换边再战, 轮流先后手
+      net.started = true;
+      newGame('online');
+    }
+  } else if (d.t === 'undoReq') {
+    // 房主申请悔棋 → 弹窗询问
+    if (!net.started || !G) return;
+    SFX.click();
+    askKind = 'undo';
+    showUndoAsk('ask', '房主「' + (net.oppName || '对方') + '」申请悔棋\n将回退到你行棋之前\n是否同意?');
+  } else if (d.t === 'undoNo') {
+    undoAsked = false;
+    SFX.undoNo();   // 拒绝警示音
+    showUndoAsk('info', '对方拒绝了你的悔棋申请');
+  } else if (d.t === 'drawReq') {
+    // 房主申请求和 → 弹窗询问
+    if (!net.started || !G || G.status !== 'playing') return;
+    SFX.click();
+    askKind = 'draw';
+    showUndoAsk('ask', '房主「' + (net.oppName || '对方') + '」申请求和\n是否同意和棋?', '求 和', '同 意 和 棋', '拒 绝');
+  } else if (d.t === 'drawNo') {
+    drawAsked = false;
+    showUndoAsk('info', '对方拒绝了你的求和申请', '求 和');
+  } else if (d.t === 'st') {
+    applyNetState(d);
+  }
+}
+
+function serializeBoard(b) { return b.map(r => r.slice()); }
+
+function broadcastState(rb) {
+  if (!net.conn) return;
+  const payload = {
+    t: 'st',
+    b: serializeBoard(G.board), turn: G.turn,
+    last: G.last, lastText: G.lastText,
+    check: G.checkSide, status: G.status, reason: G.endReason,
+    clocks: [G.clock.r, G.clock.b], moveN: G.moveN, nch: G.noCapHalf,
+    names: G.names, caps: G.caps,
+  };
+  if (rb) payload.rb = true;   // 回退标志: 客户端据此重置重复局面追踪并恢复对局
+  net.conn.send(payload);
+}
+
+function applyNetState(d) {
+  if (!G || G.mode !== 'online') return;
+  const isEcho = d.moveN === G.moveN && d.moveN > 0;
+  // 终局广播 (超时/认输/判负等) 即使 moveN 相同也必须生效, 不能被回声判定挡掉
+  const ending = d.status && d.status !== 'playing' && G.status === 'playing';
+  if (d.names) G.names = d.names;
+  if (d.caps) G.caps = d.caps;
+  if (d.clocks) { G.clock.r = d.clocks[0]; G.clock.b = d.clocks[1]; }
+  if (typeof d.nch === 'number') G.noCapHalf = d.nch;
+  if (isEcho && !ending) return;
+  // 对方行棋: 客户端补记行棋前快照与着法文本 (棋谱回放与悔棋申请对齐)
+  if (d.moveN > G.moveN) {
+    G.history.push(snap());
+    if (d.lastText) G.replayTexts.push(d.lastText);
+  }
+  const prevBoard = G.board;
+  const animate = d.last && d.moveN > G.moveN;
+  G.board = d.b;
+  G.turn = d.turn;
+  G.last = d.last || null;
+  G.lastText = d.lastText || '';
+  G.moveN = d.moveN;
+  G.checkSide = d.check || null;
+  G.sel = null;
+  // 房主回退: 重置重复局面追踪, 若已结束则恢复对局
+  if (d.rb) {
+    paused = false;                   // 若客户端正处暂停菜单, 恢复对局避免冻结卡死
+    G.history.length = d.moveN;        // 与房主对齐: 截断被撤销的着法
+    G.replayTexts.length = d.moveN;
+    G.hashList = [hashOf(G.board, G.turn)];
+    G.hashes = {}; G.hashes[G.hashList[0]] = 1;
+    G.checkLog = [];
+    G.anim = null;
+    undoAsked = false;
+    drawAsked = false;
+    hideUndoAsk();
+    if (G.status !== 'playing' || gameState !== 'playing') {
+      G.status = 'playing'; G.endReason = '';
+      gameState = 'playing';
+      hideAllScreens();
+      $('ib-menu').classList.remove('hidden'); $('ib-menu').style.display = '';
+    }
+    SFX.undo();   // 客户端收到回退: 同步倒带音效
+    G.floats.push({ txt: '已 回 退', x: W / 2, y: H / 2, t: 0, big: true, color: '#00ffff' });
+  }
+  if (animate && G.last) {
+    const [fx, fy, tx, ty] = G.last;
+    const pc = G.board[ty][tx];
+    if (pc) {
+      const cap = prevBoard[ty] && prevBoard[ty][tx] ? true : false;
+      G.anim = { fx: fx, fy: fy, tx: tx, ty: ty, p: 0, piece: pc, cap: cap };
+      if (cap) { SFX.cap(); burst(pxOf(tx), pyOf(ty), pc[0] === 'r' ? '#ff5566' : '#ffd700'); G.shake = 5; }
+      else SFX.move();
+    }
+  }
+  if (G.checkSide && animate) {
+    SFX.check();
+    G.floats.push({ txt: '将 军 !', x: W / 2, y: H / 2, t: 0, big: true, color: '#ff3344' });
+    G.flash = 0.4;
+  }
+  G.legal = legalMoves(G.board, G.turn);
+  if (d.status && d.status !== 'playing' && G.status === 'playing') {
+    G.status = d.status; G.endReason = d.reason || '';
+    hideUndoAsk();
+    drawAsked = false;
+    if (/绝杀/.test(G.endReason)) {
+      // 绝杀演出同步 (房主一手制造绝杀时, 客户端本地同样演出)
+      const kp = kingPos(G.board, G.checkSide || G.turn);
+      if (kp) burst(pxOf(kp.x), pyOf(kp.y), '#ff3344');
+      G.floats.push({ txt: '绝 杀 !', x: W / 2, y: H / 2, t: 0, big: true, color: '#ffd700' });
+      G.shake = 14; G.flash = 0.75;
+      SFX.mate();
+    } else if (G.status === net.mySide + '_win') SFX.win();
+    else if (G.status === 'draw') SFX.draw();
+    else SFX.lose();
+    setTimeout(showOver, /绝杀|困毙/.test(G.endReason) ? 1900 : 900);
+  }
+}
+
+function netHostStart() {
+  if (!net.isHost || !net.conn || !net.oppName) return;
+  SFX.click();
+  net.started = true;
+  net.conn.send({ t: 'start', host: net.myName });
+  newGame('online');
+}
+
+function netRestart() {
+  if (!net.isHost || !net.conn) return;
+  SFX.click();
+  net.mySide = OPP[net.mySide];            // 换边再战: 轮流执红先行
+  net.conn.send({ t: 'rst', swap: true });
+  newGame('online');
+}
+
+function netLeaveRoom() {
+  SFX.click();
+  netCleanup();
+  G = null; gameState = 'menu';   // 停止残留对局渲染
+  $('ib-menu').style.display = 'none';
+  netRenderLobby();
+  netStatus('');
+}
+
+function netCleanup() {
+  try { if (net.conn) net.conn.close(); } catch (e) {}
+  try { if (net.peer) net.peer.destroy(); } catch (e) {}
+  net.peer = null; net.conn = null;
+  net.inRoom = false; net.started = false;
+  net.isHost = false; net.oppName = ''; net.code = '';
+  net.mySide = 'r';
+  undoAsked = false;
+  drawAsked = false;
+  hideUndoAsk();
+}
+
+// ============ 对局协商 (悔棋/求和/认输, 联机双方协商 + 房主权威执行) ============
+let undoAsked = false;     // 我方已发出悔棋申请, 防重复
+let drawAsked = false;     // 我方已发出求和申请, 防重复
+let undoAskState = '';     // ask=对方询问我 | wait=等待对方回应 | info=提示
+let askKind = 'undo';      // undo=悔棋 | draw=联机求和 | draw-local=同屏求和 | resign=认输确认
+
+function showUndoAsk(state, text, title, yesLabel, noLabel) {
+  undoAskState = state;
+  $('ask-title').textContent = title || '悔 棋 申 请';
+  $('undo-ask-text').textContent = text || (state === 'wait'
+    ? '已发送悔棋申请\n等待对方回应...' : '');
+  $('undo-yes-btn').textContent = yesLabel || '同 意';
+  $('undo-no-btn').textContent = noLabel || '拒 绝';
+  $('undo-yes-btn').classList.toggle('hidden', state !== 'ask');
+  $('undo-no-btn').classList.toggle('hidden', state !== 'ask');
+  $('undo-close-btn').classList.toggle('hidden', state === 'ask');
+  $('undo-ask').classList.remove('hidden');
+}
+function hideUndoAsk() {
+  undoAskState = '';
+  const el = $('undo-ask');
+  if (el) el.classList.add('hidden');
+}
+// 协商弹窗关闭后: 若对局处于暂停但暂停菜单不在屏上, 重新唤回菜单, 避免棋钟冻结却无界面可操作
+function resumePausedUI() {
+  if (G && G.status === 'playing' && gameState === 'playing' && paused
+      && $('pause-screen').classList.contains('hidden')) openPause();
+}
+
+// 发起悔棋申请 (对局中走暂停菜单, 结算后走结算页按钮)
+function requestUndo() {
+  if (!G || G.mode !== 'online' || !net.started || !net.conn) return;
+  SFX.click();
+  if (undoAsked) { showUndoAsk('info', '已发送过申请\n请等待对方回应'); return; }
+  const myMoved = G.moveN >= (net.mySide === 'r' ? 1 : 2);
+  if (!myMoved) { showUndoAsk('info', '你还没有行棋\n无需悔棋'); return; }
+  undoAsked = true;
+  askKind = 'undo';
+  net.conn.send({ t: 'undoReq' });
+  showUndoAsk('wait');
+}
+
+// 发起求和: 人机由 AI 审局决定 / 同屏双人确认 / 联机申请制
+function requestDraw() {
+  if (!G || G.status !== 'playing') return;
+  if (mode === 'ai') {
+    const ev = evalBoard(G.board) * (G.ai.side === 'r' ? 1 : -1);   // AI 视角局势分
+    if (ev < -120) { endGame(null, 'AI 审时度势, 同意求和'); hideAllScreens(); }
+    else showUndoAsk('info', 'AI 拒绝了求和\n它认为局面尚可一战', '求 和');
+  } else if (mode === 'local') {
+    askKind = 'draw-local';
+    showUndoAsk('ask', '双方同意即判和棋\n确定求和?', '求 和', '同 意 和 棋', '继 续 对 弈');
+  } else {
+    if (!net.conn || !net.started) return;
+    if (drawAsked) { showUndoAsk('info', '已发送过求和申请\n请等待对方回应', '求 和'); return; }
+    drawAsked = true;
+    net.conn.send({ t: 'drawReq' });
+    showUndoAsk('wait', '已发送求和申请\n等待对方回应...', '求 和');
+  }
+}
+
+// 回应协商弹窗 (悔棋 / 求和 / 认输确认)
+function undoRespond(agree) {
+  if (undoAskState !== 'ask') { hideUndoAsk(); return; }
+  hideUndoAsk();
+  SFX.click();
+  const kind = askKind;
+  if (kind === 'resign') {
+    if (agree) doResign();
+    else openPause();     // 拒绝认输 → 回对局菜单 (保持暂停)
+    return;
+  }
+  if (kind === 'undo-local') {
+    // 同屏双人: 双方确认后撤销上一步
+    if (agree) undoGame();
+    else openPause();     // 拒绝撤销 → 回对局菜单
+    return;
+  }
+  if (kind === 'draw-local') {
+    if (agree) endGame(null, '双方同意和棋');
+    else openPause();     // 拒绝求和 → 回对局菜单
+    return;
+  }
+  if (kind === 'draw') {
+    if (net.isHost) {
+      // 房主直接裁决: 同意 → 和棋; 拒绝 → 通知客户端
+      if (agree) endGame(null, '双方同意和棋');
+      else { if (net.conn) net.conn.send({ t: 'drawNo' }); resumePausedUI(); }
+    } else {
+      // 客户端回应 → 房主执行
+      if (net.conn) net.conn.send({ t: 'drawAck', agree: !!agree });
+      resumePausedUI();
+    }
+    return;
+  }
+  // 悔棋
+  if (net.isHost) {
+    // 房主直接执行: 同意 → 回退客户端行棋前; 拒绝 → 通知客户端
+    if (agree) hostRollback(OPP[net.mySide]);
+    else { if (net.conn) net.conn.send({ t: 'undoNo' }); resumePausedUI(); }
+  } else {
+    // 客户端回应 → 房主决定是否执行
+    if (net.conn) net.conn.send({ t: 'undoAck', agree: !!agree });
+    resumePausedUI();
+  }
+}
+
+// 认输 (二次确认后执行)
+function doResign() {
+  if (!G || G.status !== 'playing') return;
+  if (mode === 'online') {
+    if (net.isHost) endGame(OPP[net.mySide], '房主认输');
+    else { endGame(OPP[net.mySide], '对方认输'); if (net.conn) net.conn.send({ t: 'resign' }); }
+  } else {
+    endGame(OPP[G.turn], '认输');
+  }
+  hideAllScreens();
+}
+
+// 房主执行回退: 回退到 side 方最近一次行棋之前的快照
+function hostRollback(side) {
+  if (!G || G.mode !== 'online' || !net.isHost || !net.conn) return;
+  let idx = -1;
+  for (let i = G.history.length - 1; i >= 0; i--) {
+    if (G.history[i].turn === side) { idx = i; break; }
+  }
+  if (idx < 0) return;
+  const s = G.history[idx];
+  G.history.length = idx;
+  G.replayTexts.length = idx;   // 棋谱同步截断
+  restoreSnap(s);
+  gameState = 'playing';
+  paused = false;
+  hideAllScreens();
+  hideUndoAsk();
+  undoAsked = false;
+  $('ib-menu').classList.remove('hidden'); $('ib-menu').style.display = '';
+  SFX.undo();   // 联机回退倒带音效
+  G.floats.push({ txt: '已 回 退', x: W / 2, y: H / 2, t: 0, big: true, color: '#00ffff' });
+  broadcastState(true);
+}
+
+// ============ 界面控制 ============
+function hideAllScreens() {
+  ['menu-screen', 'online-screen', 'pause-screen', 'over-screen'].forEach(id => $(id).classList.add('hidden'));
+}
+function backToMenu() {
+  if (net.inRoom || net.started) netCleanup();
+  paused = false;
+  stopReplayAuto();
+  $('replay-bar').classList.add('hidden');
+  G = null;
+  gameState = 'menu';
+  hideAllScreens();
+  $('menu-screen').classList.remove('hidden');
+  $('diff-panel').classList.add('hidden');
+  $('ib-menu').style.display = 'none';
+}
+function openPause() {
+  if (gameState !== 'playing') return;
+  paused = true;    // 暂停: 冻结棋钟与 AI 思考
+  $('pause-info').innerHTML = (mode === 'ai'
+    ? '人机对战 · ' + (G.ai ? ({ easy: '初学', normal: '进阶', hard: '大师' })[G.ai.level] + ' · 你执' + (OPP[G.ai.side] === 'r' ? '红' : '黑') : '')
+    : mode === 'local' ? '双人同屏' : '联机对弈') +
+    '<br>回合 ' + Math.ceil(G.moveN / 2) + ' · 红 ' + fmtClock(G.clock.r) + ' / 黑 ' + fmtClock(G.clock.b);
+  // 悔棋: 人机撤销你上一手 / 同屏双方确认 / 联机申请制
+  $('p-undo-btn').textContent = mode === 'online' ? '申请悔棋 (需对方同意)'
+    : (mode === 'local' ? '悔 棋 (双方确认)' : '悔 棋 (撤销你上一手)');
+  // 求和: AI 审局 / 同屏确认 / 联机申请
+  $('p-draw-btn').textContent = mode === 'online' ? '申请求和 (需对方同意)' : (mode === 'ai' ? '求 和 (AI 审局)' : '求 和 (双方同意)');
+  $('p-resign-btn').classList.toggle('hidden', false);
+  // 棋谱回放: 有着法才可复盘
+  $('p-replay-btn').classList.toggle('hidden', G.moveN === 0);
+  hideAllScreens();
+  $('pause-screen').classList.remove('hidden');
+}
+function closePause() {
+  hideAllScreens();
+}
+function resumeGame() {
+  if (gameState !== 'playing') return;
+  paused = false;   // 恢复计时与 AI
+  hideAllScreens();
+  SFX.click();
+}
+
+function bindClick(id, fn) { $(id).addEventListener('click', () => { ensureAudio(); fn(); }); }
+
+let aiPick = 'r';   // 人机先后手: 玩家执子方 (红=先行)
+bindClick('m-ai', () => { SFX.click(); $('diff-panel').classList.remove('hidden'); });
+bindClick('d-back', () => SFX.click() || $('diff-panel').classList.add('hidden'));
+bindClick('d-side-btn', () => {
+  SFX.click();
+  aiPick = OPP[aiPick];
+  $('d-side-btn').textContent = aiPick === 'r' ? '执子: 你执红先行' : '执子: 你执黑后行 (AI先行)';
+});
+bindClick('d-easy', () => newGame('ai', { level: 'easy', mySide: aiPick }));
+bindClick('d-normal', () => newGame('ai', { level: 'normal', mySide: aiPick }));
+bindClick('d-hard', () => newGame('ai', { level: 'hard', mySide: aiPick }));
+bindClick('m-local', () => newGame('local'));
+bindClick('m-online', () => {
+  SFX.click();
+  hideAllScreens();
+  $('online-screen').classList.remove('hidden');
+  netRenderLobby();
+});
+bindClick('net-create-btn', netCreateRoom);
+bindClick('net-join-btn', netJoinRoom);
+bindClick('net-leave-btn', netLeaveRoom);
+bindClick('net-start-btn', netHostStart);
+bindClick('net-back-btn', backToMenu);
+bindClick('net-hall-btn', () => { SFX.click(); location.href = './lobby.html'; });
+bindClick('resume-btn', resumeGame);
+bindClick('p-undo-btn', () => {
+  if (mode === 'online') { hideAllScreens(); requestUndo(); return; }   // 联机: 申请制
+  if (mode === 'local') {
+    // 同屏双人: 撤销上一步需双方确认
+    if (!G || !G.history.length) return;
+    hideAllScreens();
+    askKind = 'undo-local';
+    showUndoAsk('ask', '将撤销上一步着法\n双方确认后回退\n是否同意?', '撤 销 上 一 步', '同 意 撤 销', '不 撤 销');
+    return;
+  }
+  hideAllScreens();
+  undoGame();                                          // 人机: 直接回退你上一手
+});
+bindClick('over-replay-btn', enterReplay);
+bindClick('p-replay-btn', enterReplay);
+bindClick('rp-first', () => replayGo(0));
+bindClick('rp-prev', () => replayGo(replayIdx - 1));
+bindClick('rp-next', () => replayGo(replayIdx + 1));
+bindClick('rp-last', () => replayGo(G.history.length));
+bindClick('rp-auto', replayAutoToggle);
+bindClick('rp-exit', exitReplay);
+bindClick('over-undo-btn', () => {
+  if (mode === 'online') { requestUndo(); return; }   // 联机: 结算后仍可申请
+  if (!G || !G.history.length) return;
+  hideAllScreens();
+  undoGame();
+  gameState = 'playing';
+  $('ib-menu').classList.remove('hidden'); $('ib-menu').style.display = '';
+});
+bindClick('undo-yes-btn', () => undoRespond(true));
+bindClick('undo-no-btn', () => undoRespond(false));
+bindClick('undo-close-btn', () => { SFX.click(); hideUndoAsk(); resumePausedUI(); });
+bindClick('p-draw-btn', () => { SFX.click(); requestDraw(); });
+bindClick('p-resign-btn', () => {
+  SFX.click();
+  if (!G || G.status !== 'playing') return;
+  askKind = 'resign';
+  showUndoAsk('ask', '认输将直接判负\n确定认输?', '认 输', '确 定 认 输', '再 想 想');
+});
+bindClick('p-menu-btn', backToMenu);
+bindClick('p-hall-btn', () => { SFX.click(); location.href = './lobby.html'; });
+bindClick('restart-btn', () => {
+  SFX.click();
+  if (mode === 'online') { if (net.isHost) netRestart(); return; }
+  if (mode === 'ai') newGame('ai', { level: G.ai.level, mySide: OPP[G.ai.side] });
+  else newGame('local');
+});
+bindClick('menu-btn', backToMenu);
+bindClick('over-hall-btn', () => { SFX.click(); location.href = './lobby.html'; });
+bindClick('hall-btn', () => { SFX.click(); location.href = './lobby.html'; });
+bindClick('ib-menu', openPause);
+$('net-join-code').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); ensureAudio(); netJoinRoom(); }
+});
+
+function syncMuteBtns() {
+  const txt = '音效: ' + (soundOn ? '开' : '关');
+  $('mute-btn').textContent = txt;
+  $('p-mute-btn').textContent = txt;
+}
+$('mute-btn').addEventListener('click', () => {
+  soundOn = !soundOn;
+  try { localStorage.setItem('xqGongfuSound', soundOn ? '1' : '0'); } catch (e) {}
+  syncMuteBtns(); SFX.click();
+});
+$('p-mute-btn').addEventListener('click', () => {
+  soundOn = !soundOn;
+  try { localStorage.setItem('xqGongfuSound', soundOn ? '1' : '0'); } catch (e) {}
+  syncMuteBtns(); SFX.click();
+});
+
+// Esc = 关闭悔棋弹窗 / 菜单 / 继续
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (gameState === 'replay') { exitReplay(); return; }   // 回放中 Esc 退出
+  const ua = $('undo-ask');
+  if (ua && !ua.classList.contains('hidden')) {
+    if (undoAskState !== 'ask') hideUndoAsk();   // 询问态不响应 Esc, 须明确答复
+    return;
+  }
+  if (!$('pause-screen').classList.contains('hidden')) { resumeGame(); return; }
+  if (gameState === 'playing') openPause();
+});
+
+// ============ 启动 ============
+resize();
+syncMuteBtns();
+</script>
+</body>
+</html>
