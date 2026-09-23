@@ -16,26 +16,65 @@
     display: flex; flex-direction: column;
     padding: 0 16px calc(20px + env(safe-area-inset-bottom)); }
 
-  /* ===== 顶栏 ===== */
-  header { padding-top: calc(22px + env(safe-area-inset-top)); text-align: center; }
-  .hall-logo { font-size: clamp(30px, 7vw, 52px); font-weight: bold; color: #00ff88;
-    letter-spacing: 10px; text-shadow: 0 0 26px #00ff88, 4px 4px 0 #004422; }
-  .hall-sub { font-size: 12px; color: #00ffffaa; letter-spacing: 6px; margin-top: 4px; }
+  /* ===== 顶栏 (经典街机 attract 界面, 紧凑排版确保首屏完整) ===== */
+  header { padding-top: calc(14px + env(safe-area-inset-top)); text-align: center; }
 
-  /* 公告跑马灯 */
-  .notice { margin: 16px auto 0; width: min(680px, 94vw);
-    border: 1.5px solid #ffd70044; background: #141008; border-radius: 8px;
-    display: flex; align-items: center; overflow: hidden; }
-  .notice-tag { flex: none; background: #ffd700; color: #000; font-weight: bold;
-    font-size: 12px; padding: 7px 10px; letter-spacing: 1px; }
-  .notice-scroll { flex: 1; overflow: hidden; position: relative; height: 30px; }
-  .notice-scroll span { position: absolute; white-space: nowrap; font-size: 13px;
-    color: #ffd700; line-height: 30px; padding-left: 100%;
+  /* 题字: 霓虹呼吸灯 (letter-spacing 会在末字后多一段, 用 text-indent 等量补回居中) */
+  .hall-logo { font-size: clamp(30px, 7vw, 52px); font-weight: bold; color: #00ff88;
+    letter-spacing: 10px; text-indent: 10px; line-height: 1.15;
+    text-shadow: 0 0 26px #00ff88, 0 0 60px #00ff8844, 4px 4px 0 #004422;
+    animation: logoGlow 3.2s ease-in-out infinite alternate; }
+  @keyframes logoGlow {
+    from { text-shadow: 0 0 20px #00ff88, 0 0 42px #00ff8833, 4px 4px 0 #004422; }
+    to   { text-shadow: 0 0 36px #00ff88, 0 0 84px #00ff8866, 4px 4px 0 #004422; }
+  }
+
+  /* 副题: 两侧渐隐花线 + 街机 attract 式闪烁符号 */
+  .hall-sub { display: flex; align-items: center; justify-content: center; gap: 12px;
+    margin-top: 3px; font-size: 12px; color: #00ffffaa; letter-spacing: 5px; }
+  .hall-sub::before, .hall-sub::after { content: ''; height: 1px;
+    width: clamp(28px, 9vw, 90px); background: linear-gradient(90deg, transparent, #00ffff66); }
+  .hall-sub::after { background: linear-gradient(90deg, #00ffff66, transparent); }
+  .blink { animation: blink 1.1s steps(2) infinite; color: #00ffff; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* 公告: 内嵌 LED 显示屏 (凹陷屏体 + 金币浮雕标签 + 琥珀灯字 + 扫描线) */
+  .notice { margin: 10px auto 0; width: min(680px, 94vw);
+    border: 2px solid #3a2a00; border-radius: 6px; background: #100a02;
+    box-shadow: 0 0 0 1.5px #ffd70033, inset 0 0 20px #000000cc;
+    display: flex; align-items: stretch; overflow: hidden; }
+  .notice-tag { flex: none; display: flex; align-items: center;
+    background: linear-gradient(180deg, #ffe9a0, #f5c842 55%, #c99414);
+    color: #4a3200; font-weight: bold; font-size: 12px; padding: 0 12px;
+    letter-spacing: 2px; text-shadow: 0 1px 0 #ffffff88;
+    border-right: 2px solid #00000055; }
+  .notice-scroll { flex: 1; overflow: hidden; position: relative; height: 32px; }
+  .notice-scroll::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,0.28) 0 1px, transparent 1px 3px); }
+  .notice-scroll span { position: absolute; white-space: nowrap; font-size: 13px; font-weight: bold;
+    color: #ffa200; text-shadow: 0 0 10px #ff880055, 0 0 2px #ff8800;
+    line-height: 32px; padding-left: 100%;
     animation: marquee 18s linear infinite; }
   @keyframes marquee { to { transform: translateX(-100%); } }
 
+  @media (prefers-reduced-motion: reduce) {
+    .hall-logo, .blink { animation: none; }
+  }
+
+  /* 窄屏手机: 进一步压缩头部, 保证标题到第一张游戏卡首屏直达 */
+  @media (max-width: 600px) {
+    .hall-logo { font-size: clamp(26px, 8vw, 38px); letter-spacing: 6px; text-indent: 6px; }
+    .hall-sub { font-size: 10px; letter-spacing: 3px; gap: 8px; }
+    .notice-scroll span { font-size: 12px; }
+    .tab { font-size: 12px; padding: 6px 14px; }
+    #search-input { padding: 8px 40px 8px 34px; font-size: 13px; }
+    .hall-tip { font-size: 10px; }
+    #admin-open-btn { font-size: 12px; padding: 7px 20px; }
+    #games { gap: 12px; }
+  }
+
   /* ===== 分类标签 ===== */
-  .tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 22px 0 6px; }
+  .tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 12px 0 4px; }
   .tab { font-family: inherit; cursor: pointer; font-size: 13px; color: #00ffff;
     background: #001a2288; border: 1.5px solid #00ffff44; border-radius: 20px;
     padding: 7px 18px; transition: all .15s; }
@@ -43,7 +82,7 @@
   .tab.on { background: #00ffff; color: #000; font-weight: bold; box-shadow: 0 0 14px #00ffff88; }
 
   /* 搜索框 */
-  .search-bar { margin: 14px auto 0; width: min(680px, 94vw); position: relative; display: flex; }
+  .search-bar { margin: 8px auto 0; width: min(680px, 94vw); position: relative; display: flex; }
   .s-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); font-size: 15px; opacity: 0.7; pointer-events: none; }
   #search-input { flex: 1; font-family: inherit; font-size: 14px; color: #00ff88;
     background: #0a0a1a; border: 2px solid #00ff8833; border-radius: 22px;
@@ -56,11 +95,11 @@
   .s-clear:hover { background: #ff5577; color: #fff; }
   .hidden { display: none !important; }
 
-  .hall-tip { text-align: center; font-size: 11px; color: #556677; margin: 8px 0 4px; letter-spacing: 1px; }
+  .hall-tip { text-align: center; font-size: 11px; color: #556677; margin: 4px 0 0; letter-spacing: 1px; }
 
   /* ===== 游戏卡片网格 ===== */
   #games { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 18px; width: min(960px, 96vw); margin: 14px auto 0; flex: 1; }
+    gap: 18px; width: min(960px, 96vw); margin: 12px auto 0; flex: 1; }
 
   .card { position: relative; border: 2px solid #00ffff33; background: #0a0a1a;
     border-radius: 12px; overflow: hidden; cursor: pointer; transition: all .18s; }
@@ -105,6 +144,65 @@
   .play-btn:hover { background: #00ff88; color: #000; box-shadow: 0 0 16px #00ff88; }
   .card.coming .play-btn { color: #556677; border-color: #55667766; background: transparent; cursor: default; }
 
+  /* ===== 添加新游戏 (可视化管理面板) ===== */
+  .admin-open { display: flex; justify-content: center; margin: 8px 0 0; }
+  #admin-open-btn { font-family: inherit; cursor: pointer; font-size: 13px; font-weight: bold;
+    color: #ffd700; background: #ffd70011; border: 1.5px dashed #ffd70088;
+    border-radius: 22px; padding: 8px 24px; letter-spacing: 2px; transition: all .15s; }
+  #admin-open-btn:hover { border-color: #ffd700; box-shadow: 0 0 14px #ffd70033; background: #ffd70022; }
+
+  .modal { position: fixed; inset: 0; z-index: 50; background: rgba(3,3,10,0.78);
+    display: flex; align-items: center; justify-content: center; padding: 14px;
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+  .admin-panel { width: min(480px, 94vw); max-height: 88vh; overflow: hidden;
+    display: flex; flex-direction: column;
+    background: #0a0a1a; border: 2px solid #ffd70055; border-radius: 12px;
+    padding: 16px 18px 14px; -webkit-overflow-scrolling: touch; text-align: left; }
+  /* 中段: 表单+列表在可视区内滚动; 底栏固定 → 导出按钮任何屏幕都看得见 */
+  .admin-scroll { flex: 1; overflow-y: auto; min-height: 0; padding-bottom: 4px; }
+  .admin-foot { flex: none; border-top: 1px solid #22224a; padding-top: 12px; margin-top: 10px; }
+  .admin-head { display: flex; align-items: center; justify-content: space-between; }
+  .admin-head b { color: #ffd700; font-size: 17px; letter-spacing: 3px; }
+  #admin-close { font-family: inherit; cursor: pointer; background: #22223a; color: #8899aa;
+    border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 13px; }
+  #admin-close:hover { background: #ff5577; color: #fff; }
+  .admin-tip { font-size: 11px; color: #7788aa; line-height: 1.7; margin: 8px 0 10px; }
+  .admin-tip b { color: #00ff88; }
+  .f-label { display: block; font-size: 12px; color: #00ffff; letter-spacing: 2px; margin: 12px 0 5px; }
+  .f-input { width: 100%; font-family: inherit; font-size: 16px; color: #00ff88; background: #050510;
+    border: 1.5px solid #00ff8833; border-radius: 8px; padding: 9px 12px; }
+  .f-input:focus { outline: none; border-color: #00ff88; }
+  .f-input::placeholder { color: #33474f; }
+  .emoji-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .emoji-btn { font-family: inherit; cursor: pointer; font-size: 18px; background: #101024;
+    border: 1.5px solid #22224a; border-radius: 8px; width: 38px; height: 38px; line-height: 1; }
+  .emoji-btn.on { border-color: #ffd700; background: #2a2208; box-shadow: 0 0 10px #ffd70044; }
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { font-family: inherit; cursor: pointer; font-size: 12px; color: #8899aa;
+    background: #101024; border: 1.5px solid #22224a; border-radius: 16px; padding: 6px 14px; }
+  .chip.on { color: #000; background: #00ffff; border-color: #00ffff; font-weight: bold; }
+  #ag-err { color: #ff5577; font-size: 12px; min-height: 16px; margin-top: 10px; }
+  #ag-add-btn { width: 100%; font-family: inherit; cursor: pointer; font-size: 15px; font-weight: bold;
+    color: #000; background: #ffd700; border: none; border-radius: 8px; padding: 11px;
+    margin-top: 4px; letter-spacing: 3px; }
+  #ag-add-btn:hover { box-shadow: 0 0 16px #ffd70066; }
+  .admin-sep { height: 1px; background: #22224a; margin: 16px 0 10px; }
+  .admin-sub { font-size: 13px; color: #00ffff; letter-spacing: 2px; margin-bottom: 8px; }
+  #ag-list { display: flex; flex-direction: column; gap: 6px; }
+  .ag-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #ddeeff;
+    background: #101024; border: 1px solid #22224a; border-radius: 8px; padding: 7px 10px; }
+  .ag-row .ico { font-size: 16px; }
+  .ag-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ag-row .nm small { color: #556677; }
+  .ag-del { font-family: inherit; cursor: pointer; background: none; color: #ff5577;
+    border: 1px solid #ff557766; border-radius: 6px; font-size: 11px; padding: 4px 9px; }
+  .ag-del:hover { background: #ff5577; color: #fff; }
+  .ag-empty { font-size: 12px; color: #556677; padding: 4px 0; }
+  #ag-export { width: 100%; font-family: inherit; cursor: pointer; font-size: 13px; font-weight: bold;
+    color: #ffd700; background: #ffd70011; border: 1.5px solid #ffd70088; border-radius: 8px;
+    padding: 11px; letter-spacing: 1px; }
+  #ag-export:hover { border-color: #ffd700; background: #ffd70022; box-shadow: 0 0 12px #ffd70033; }
+
   /* ===== 底部 ===== */
   footer { text-align: center; margin-top: 30px; padding-top: 16px;
     border-top: 1px dashed #00ffff22; }
@@ -114,11 +212,15 @@
   .foot-tech { font-size: 10px; color: #445566; line-height: 1.8; letter-spacing: 1px; }
 
   @media (max-height: 700px) {
-    header { padding-top: calc(12px + env(safe-area-inset-top)); }
-    .notice { margin-top: 10px; }
-    .tabs { margin: 14px 0 4px; }
+    header { padding-top: calc(10px + env(safe-area-inset-top)); }
+    .notice { margin-top: 8px; }
+    .tabs { margin: 10px 0 2px; }
+    .search-bar { margin-top: 6px; }
+    .admin-open { margin-top: 6px; }
+    #games { margin-top: 10px; }
     .cover { height: 118px; }
     .cover-icon { font-size: 50px; }
+    footer { margin-top: 20px; padding-top: 12px; }
   }
 </style>
 </head>
@@ -128,7 +230,7 @@
 
   <header>
     <div class="hall-logo">恭夫游戏大厅</div>
-    <div class="hall-sub">GONGFU GAME HALL · ONLINE ARCADE</div>
+    <div class="hall-sub"><span class="blink">▶</span> GONGFU GAME HALL · ONLINE ARCADE</div>
     <div class="notice">
       <div class="notice-tag">公告</div>
       <div class="notice-scroll"><span id="notice-text">正在加载公告…</span></div>
@@ -142,7 +244,8 @@
     <input id="search-input" type="search" placeholder="搜索游戏名 / 玩法 / 标签, 如: 联机" autocomplete="off">
     <button id="search-clear" class="s-clear hidden">✕</button>
   </div>
-  <div class="hall-tip" id="hall-tip">本大厅开源扩展: 在 lobby.html 的 GAMES 数组中添加一条即可接入新游戏</div>
+  <div class="hall-tip" id="hall-tip">把做好的游戏 html 与大厅放同一文件夹, 点下方按钮填两个名字即可上架</div>
+  <div class="admin-open"><button id="admin-open-btn">＋ 添加新游戏</button></div>
 
   <div id="games"></div>
 
@@ -150,8 +253,45 @@
     <div class="foot-links">
       <a href="https://gqp.nat100.top">▶ 恭夫乡村平台 gqp.nat100.top</a>
     </div>
-    <div class="foot-tech">恭夫游戏大厅 · 单文件零依赖 · 手机/电脑全适配<br>新游戏接入: GAMES 数组加一条 { name, file } 即可 (或同目录放 games.json) · 卡片/标签/搜索/最近游玩/文件名自适应全自动</div>
+    <div class="foot-tech">恭夫游戏大厅 · 单文件零依赖 · 手机/电脑全适配<br>新游戏接入: 点"＋添加新游戏"填两个名字即可 (或同目录放 games.json) · 卡片/标签/搜索/最近游玩/文件名自适应全自动</div>
   </footer>
+</div>
+
+<!-- ===== 添加新游戏 · 可视化管理面板 ===== -->
+<div class="modal hidden" id="admin-modal">
+  <div class="admin-panel">
+    <div class="admin-head"><b>＋ 添加新游戏</b><button id="admin-close">✕</button></div>
+    <div class="admin-tip">填写带 <b>*</b> 的两项即可上架, 其余自动生成。<br>游戏 html 文件需与本大厅放在<b>同一文件夹</b>; 文件名不用手写 .html 会自动补。</div>
+
+    <div class="admin-scroll">
+      <label class="f-label" for="ag-name">游戏名 *</label>
+      <input class="f-input" id="ag-name" placeholder="如: 俄罗斯方块恭夫" maxlength="20">
+
+      <label class="f-label" for="ag-file">文件名 *</label>
+      <input class="f-input" id="ag-file" placeholder="如: tetris 或 tetris.html" maxlength="60">
+
+      <label class="f-label">图标 (点选, 可跳过)</label>
+      <div class="emoji-row" id="ag-emoji-row"></div>
+
+      <label class="f-label" for="ag-desc">一句话简介 (可跳过)</label>
+      <input class="f-input" id="ag-desc" placeholder="如: 经典方块下落, 消行连击特效拉满!" maxlength="40">
+
+      <label class="f-label">分类 (可多选)</label>
+      <div class="chip-row" id="ag-chip-row"></div>
+
+      <div id="ag-err"></div>
+      <button id="ag-add-btn">✓ 添加并上架</button>
+
+      <div class="admin-sep"></div>
+      <div class="admin-sub">我添加的游戏 (保存在本机浏览器)</div>
+      <div id="ag-list"></div>
+    </div>
+
+    <!-- 固定底栏: 无论面板多长, 导出按钮始终可见 -->
+    <div class="admin-foot">
+      <button id="ag-export">⬇ 导出 games.json · 分享给所有玩家</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -264,9 +404,22 @@ function normalizeGames(raw) {
 }
 
 let GAMES = [];            // 标准化后的列表 (渲染用)
+let jsonGames = [];        // games.json 拉取到的共享层 (全员可见)
+
+// 用户自定义层: 点"＋添加新游戏"面板保存, 存本机 localStorage, 优先级最高
+const USER_KEY = 'gongfuHallUserGames';
+function loadUserGames() {
+  try {
+    const a = JSON.parse(localStorage.getItem(USER_KEY) || '[]');
+    return (Array.isArray(a) ? a : []).filter(g => g && g.name && g.file);
+  } catch (e) { return []; }
+}
+let userGames = loadUserGames();
+function saveUserGames() { try { localStorage.setItem(USER_KEY, JSON.stringify(userGames)); } catch (e) {} }
+
 function rebuildGames(extra) {
-  // games.json 条目排前 + 内置排后: 同名文件时 json 版本覆盖内置版
-  const merged = (extra || []).concat(RAW_GAMES);
+  // 合并优先级: 我添加的(本机) > games.json(全员) > 内置 RAW_GAMES; 同文件名高优先级覆盖
+  const merged = userGames.concat(extra || jsonGames).concat(RAW_GAMES);
   const seenFile = new Set();
   GAMES = normalizeGames(merged.filter(g => {
     const f = String(g && g.file);
@@ -404,7 +557,7 @@ function updateTip(n) {
   const el = $('#hall-tip');
   el.textContent = searchQ
     ? '找到 ' + n + ' 款与「' + searchQ + '」相关的游戏 (分类: ' + (TABS.find(t => t.key === curTab) || {}).label + ')'
-    : '新游戏自动收纳: GAMES 数组最少写 { name, file } 两个字段即可上架 · 同目录 games.json 亦可扩展 · 当前分类共 ' + n + ' 款';
+    : '当前分类共 ' + n + ' 款 · 新游戏? 点下方"＋添加新游戏", 填两个名字即可上架';
 }
 function renderGames() {
   const el = $('#games');
@@ -539,13 +692,137 @@ sClear.addEventListener('click', () => {
   sInput.focus();
 });
 
+// ============ 添加新游戏 · 面板 ============
+const AG_EMOJIS = ['🎮', '🕹️', '👾', '🎯', '🚀', '⚡', '🔥', '💎', '🎲', '🧩', '🏆', '🥊', '🧱', '🏓', '💣', '🐉'];
+const agSel = { emoji: '🎮', tags: ['单人挑战'] };
+
+function openAdmin() {
+  agErr('');
+  renderEmojiRow();
+  renderChips();
+  renderAdminList();
+  $('#admin-modal').classList.remove('hidden');
+}
+function closeAdmin() { $('#admin-modal').classList.add('hidden'); }
+function agErr(msg, ok) {
+  const el = $('#ag-err');
+  el.textContent = msg || '';
+  el.style.color = ok ? '#00ff88' : '';
+}
+
+function renderEmojiRow() {
+  const row = $('#ag-emoji-row');
+  row.innerHTML = '';
+  AG_EMOJIS.forEach(em => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'emoji-btn' + (agSel.emoji === em ? ' on' : '');
+    b.textContent = em;
+    b.onclick = () => { agSel.emoji = em; renderEmojiRow(); };
+    row.appendChild(b);
+  });
+}
+function renderChips() {
+  const row = $('#ag-chip-row');
+  row.innerHTML = '';
+  ['联机', '单人挑战'].forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip' + (agSel.tags.includes(t) ? ' on' : '');
+    b.textContent = t;
+    b.onclick = () => {
+      agSel.tags = agSel.tags.includes(t) ? agSel.tags.filter(x => x !== t) : agSel.tags.concat([t]);
+      if (!agSel.tags.length) agSel.tags = ['单人挑战'];   // 至少留一个, 否则进不了任何分类
+      renderChips();
+    };
+    row.appendChild(b);
+  });
+}
+function renderAdminList() {
+  const el = $('#ag-list');
+  el.innerHTML = '';
+  const exp = $('#ag-export');
+  exp.textContent = userGames.length
+    ? '⬇ 导出 games.json (' + userGames.length + ' 款) · 分享给所有玩家'
+    : '⬇ 导出 games.json · 分享给所有玩家';
+  if (!userGames.length) {
+    el.innerHTML = '<div class="ag-empty">还没有添加游戏 · 填上方表单即可上架第一款</div>';
+    return;
+  }
+  userGames.forEach((g, i) => {
+    const row = document.createElement('div');
+    row.className = 'ag-row';
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.innerHTML = (g.icon || '🎮') + ' ' + g.name + ' <small>' + g.file + '</small>';
+    const del = document.createElement('button');
+    del.className = 'ag-del';
+    del.textContent = '删除';
+    del.onclick = () => {
+      userGames.splice(i, 1);
+      saveUserGames();
+      rebuildGames();
+      renderAdminList();
+    };
+    row.appendChild(nm);
+    row.appendChild(del);
+    el.appendChild(row);
+  });
+}
+function addUserGame() {
+  const name = $('#ag-name').value.trim();
+  let file = $('#ag-file').value.trim().replace(/^\.\//, '');
+  const desc = $('#ag-desc').value.trim();
+  if (!name) return agErr('请填写游戏名');
+  if (!file) return agErr('请填写游戏文件名');
+  if (!/\.[a-z0-9]+$/i.test(file)) file += '.html';       // 忘写后缀自动补
+  if (GAMES.some(g => g.file === file || g.altFile === file)) return agErr('文件 ' + file + ' 已在大厅中, 无需重复添加');
+  userGames.unshift({
+    name: name, file: file, icon: agSel.emoji,
+    desc: desc || undefined,               // 空则走引擎默认简介
+    tags: agSel.tags.slice(), badge: 'NEW',
+  });
+  saveUserGames();
+  rebuildGames();
+  $('#ag-name').value = ''; $('#ag-file').value = ''; $('#ag-desc').value = '';
+  closeAdmin();                              // 关面板让用户立刻看到新卡片
+}
+function exportUserGames() {
+  if (!userGames.length) return agErr('还没有可导出的游戏, 先添加一款');
+  const data = JSON.stringify(userGames, null, 2);
+  try {
+    const blob = new Blob([data], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'games.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    agErr('已导出 games.json ✓ 与大厅一起上传到网站同目录, 所有访客都能看到', true);
+  } catch (e) {
+    console.log('[大厅] games.json 内容如下, 手动保存:\n' + data);
+    agErr('导出失败, 内容已打印到控制台 (F12 查看)');
+  }
+}
+
 // ============ 启动 ============
-$('#notice-text').textContent = NOTICE;
+const nt = $('#notice-text');
+nt.textContent = NOTICE;
+nt.style.animationDuration = Math.max(10, Math.round(NOTICE.length * 0.42)) + 's';   // 按公告长度自动配速
 rebuildGames([]);        // 先用内置列表渲染 (games.json 到达后自动合并重渲)
 // 外置 games.json (可选): 与 lobby.html 同目录即自动加载合并, 加新游戏无需改本文件
 fetch('./games.json').then(r => r.ok ? r.json() : null).then(arr => {
-  if (Array.isArray(arr) && arr.length) rebuildGames(arr);
+  if (Array.isArray(arr) && arr.length) { jsonGames = arr; rebuildGames(); }
 }).catch(() => {});     // 无 games.json / file:// 打不开 → 静默使用内置列表
+
+// 面板接线
+$('#admin-open-btn').addEventListener('click', openAdmin);
+$('#admin-close').addEventListener('click', closeAdmin);
+$('#admin-modal').addEventListener('click', e => { if (e.target === $('#admin-modal')) closeAdmin(); });
+$('#ag-add-btn').addEventListener('click', addUserGame);
+$('#ag-export').addEventListener('click', exportUserGames);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#admin-modal').classList.contains('hidden')) closeAdmin();
+});
 </script>
 </body>
 </html>
